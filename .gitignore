@@ -1,0 +1,10 @@
+build/
+build-*/
+.vs/
+*.user
+*.suo
+*.obj
+*.pdb
+*.exe
+*.vst3/
+.DS_Store

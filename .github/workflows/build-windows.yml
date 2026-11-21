@@ -1,0 +1,41 @@
+name: Build Windows VST3 + Standalone
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-2022
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure MSVC x64
+        run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64
+      - name: Build Release
+        run: cmake --build build --config Release --parallel 2 --target MOOGER_VST3 MOOGER_Standalone anks_audio_smoke mooger_modules
+      - name: Run DSP tests
+        run: ctest --test-dir build -C Release --output-on-failure --no-tests=error
+      - name: Check Windows artifacts
+        shell: pwsh
+        run: |
+          $root = 'build/MOOGER_artefacts/Release'
+          $plugin = "$root/VST3/MOOGER.vst3/Contents/x86_64-win/MOOGER.vst3"
+          $standalone = "$root/Standalone/MOOGER.exe"
+          foreach ($file in @($plugin, $standalone)) {
+            if (!(Test-Path -LiteralPath $file -PathType Leaf)) {
+              throw "Missing build artifact: $file"
+            }
+          }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MOOGER-Windows-x64
+          if-no-files-found: error
+          path: |
+            build/MOOGER_artefacts/Release/VST3/
+            build/MOOGER_artefacts/Release/Standalone/
