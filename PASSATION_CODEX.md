@@ -1,13 +1,17 @@
-# Passation — MOOGER V0.3
+# Passation — MOOGER V0.4
 
-Le nom produit est MOOGER. Cette version dérive de ANKS V0.2 corrigé et ajoute uniquement les deux premiers compléments validés : VCO 2 et mixer audio. Les trois autres compléments restent une feuille de route.
+Développement natif C++17/JUCE. Cœur mélodique V0.3 conservé, ajout d'une voix rythmique inspirée du rôle du DFAM, sans prétendre émuler ses circuits.
 
-Sources : SynthEngine.h (DSP), PluginProcessor.* (paramètres/état/MIDI), PluginEditor.* (rack fixe natif), CMakeLists.txt et workflow Windows.
+- PercussionEngine.h : deux oscillateurs, triangle/carré, bruit déterministe, FM, filtre TPT, enveloppes amplitude/hauteur et huit pas pitch/vélocité. Pas d'allocations ou verrous dans ce moteur.
+- SynthEngine.h : deux nouvelles prises ajoutées après les 19 existantes ; sortie percussion routable, bus indépendant vers le master. Dix câbles par défaut. Indices historiques conservés.
+- PluginProcessor.* : 31 paramètres ajoutés à la fin de la liste, migration des IDs manquants vers leurs défauts, état XML version 4 avec racine historique inchangée. DRUM RUN démarre seulement la percussion ; HIT est un déclenchement indépendant.
+- PluginEditor.* : troisième rangée percussion, huit hauteurs/vélocités, commande LINK BPM, redimensionnement proportionnel du rack et de ses prises.
+- Tests/Percussion.cpp : séquenceur, silence, patching, enveloppes, clocks et extrêmes aux trois fréquences.
+- Tests/Processor.cpp : traitement JUCE aux trois fréquences et quatre tailles de blocs, sauvegarde des paramètres/câbles, migration V0.3, HIT, captures du rack à 1120×950 et 784×665.
+- Workflow Windows : VST3 + EXE, quatre tests et artefact séparé MOOGER-Rack-Preview.
 
-VCO2 : quatre ondes, tune2, fine2, wave2. Mixer : mix1, mix2, mixLevel, gains lissés. Les cinq nouveaux ports sont ajoutés après outputIn pour préserver les anciens indices. Neuf câbles par défaut. Le routage reste acyclique et prédéfini.
+LINK BPM partage uniquement la valeur du BPM. Il ne verrouille pas la phase, le transport Ableton ou le départ des deux séquenceurs. STOP laisse finir le son. Vélocité zéro laisse finir le coup précédent.
 
-Les anciens noms de classes, options CMake ANKS et identifiants plugin sont conservés pour limiter les changements techniques. Produit et cibles CMake : MOOGER. Les états utilisent encore ANKSModularState ; version=3. Les six nouveaux paramètres reçoivent leurs défauts quand ils manquent dans un ancien état.
+Les fonctions de la voix rythmique sont une implémentation originale : filtre TPT, enveloppes et plage de paramètres propres à MOOGER, pas une copie DFAM.
 
-Vérifications effectuées : compilation et CTest du DSP Release, contrôle syntaxique JUCE du processeur et de l'éditeur. Voir TESTS.md. Le scan VST3, la compatibilité d'état, le rendu GUI et l'écoute dans Ableton restent à vérifier sous Windows. Aucun binaire Windows validé n'est fourni.
-
-Prochaine étape concrète : exécuter le workflow Windows, ouvrir dans Ableton Live 12, vérifier le patch neuf, puis VCO2/mixer et sauvegarde/restauration. L'architecture ajout/déplacement de modules reste à développer avant d'annoncer un rack extensible.
+Reste à vérifier après build Windows : scan et écoute dans Ableton Live 12, ergonomie, sauvegarde d'un vrai projet DAW et charge CPU. La fidélité sonore à un Moog matériel n'a pas été mesurée. Le rack dynamique ajoutable/déplaçable reste à développer.

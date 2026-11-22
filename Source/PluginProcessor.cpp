@@ -49,6 +49,32 @@ APVTS::ParameterLayout ANKSModularProcessor::createParameterLayout()
         result.add (std::make_unique<juce::AudioParameterBool>
                     (ID {"on" + juce::String (i + 1), 1}, "Step " + juce::String (i + 1) + " enabled", true));
     }
+    // Append new IDs so V0.3 host parameter indices remain stable.
+    result.add (std::make_unique<juce::AudioParameterBool> (ID {"drumRun",1}, "Percussion run", false));
+    result.add (std::make_unique<juce::AudioParameterBool> (ID {"drumFollow",1}, "Percussion follows core tempo", true));
+    result.add (std::make_unique<juce::AudioParameterChoice> (ID {"drumWave",1}, "Percussion waveform",
+                   juce::StringArray {"Triangle", "Square"}, 0));
+    addFloat (result, "drumBpm", "Percussion tempo", 40, 240, 110, 0.5f);
+    addFloat (result, "drumPitch", "Percussion base Hz", 25, 800, 65.4064f, 0.12f);
+    addFloat (result, "drumRatio", "Percussion VCO2 ratio", 0.25f, 8, 1.5f, 0.3f);
+    addFloat (result, "drumTone", "Percussion VCO2 mix", 0, 1, 0.35f, 0.5f);
+    addFloat (result, "drumNoise", "Percussion noise", 0, 1, 0.15f, 0.5f);
+    addFloat (result, "drumFm", "Percussion FM", 0, 4, 0, 0.25f);
+    addFloat (result, "drumDecay", "Percussion amp decay seconds", 0.02f, 2, 0.22f, 0.2f);
+    addFloat (result, "drumPitchDecay", "Percussion pitch decay seconds", 0.005f, 1, 0.04f, 0.15f);
+    addFloat (result, "drumPitchDepth", "Percussion pitch envelope semitones", 0, 48, 24, 0.5f);
+    addFloat (result, "drumCutoff", "Percussion cutoff Hz", 40, 16000, 3500, 0.2f);
+    addFloat (result, "drumRes", "Percussion resonance", 0.5f, 6, 0.8f, 0.25f);
+    addFloat (result, "drumLevel", "Percussion level", 0, 1, 0.55f, 0.5f);
+    const anks::DrumParameters defaults;
+    for (int i = 0; i < 8; ++i)
+    {
+        const auto suffix = juce::String (i + 1);
+        result.add (std::make_unique<juce::AudioParameterInt> (ID {"drumNote" + suffix, 1},
+            "Percussion pitch " + suffix, -24, 24, defaults.steps[static_cast<size_t> (i)].pitch));
+        addFloat (result, ("drumVel" + suffix).toRawUTF8(), ("Percussion velocity " + suffix).toRawUTF8(),
+                  0, 1, defaults.steps[static_cast<size_t> (i)].velocity, 0.5f);
+    }
     return result;
 }
 
@@ -64,6 +90,8 @@ void ANKSModularProcessor::prepareToPlay (double sampleRate, int)
     currentSampleRate = std::max (8000.0, sampleRate);
     engine.prepare (currentSampleRate);
     activeStep.store (-1, std::memory_order_relaxed);
+    activeDrumStep.store (-1, std::memory_order_relaxed);
+    drumTriggerRequested.store (false, std::memory_order_relaxed);
     previewCountdown = 0;
 }
 void ANKSModularProcessor::releaseResources() {}
@@ -121,12 +149,25 @@ anks::Parameters ANKSModularProcessor::readParameters() const noexcept
     p.sustain = val ("sustain"); p.release = val ("release");
     p.lfoRate = val ("lfoRate"); p.lfoDepth = val ("lfoDepth");
     p.master = val ("master");
+    p.drums.run = val ("drumRun") > 0.5f;
+    p.drums.followTempo = val ("drumFollow") > 0.5f;
+    p.drums.waveform = static_cast<int> (val ("drumWave"));
+    p.drums.bpm = val ("drumBpm"); p.drums.pitchHz = val ("drumPitch");
+    p.drums.ratio = val ("drumRatio"); p.drums.tone = val ("drumTone");
+    p.drums.noise = val ("drumNoise"); p.drums.fm = val ("drumFm");
+    p.drums.decay = val ("drumDecay"); p.drums.pitchDecay = val ("drumPitchDecay");
+    p.drums.pitchDepth = val ("drumPitchDepth"); p.drums.cutoff = val ("drumCutoff");
+    p.drums.resonance = val ("drumRes"); p.drums.level = val ("drumLevel");
     for (int i = 0; i < 8; ++i)
     {
         const auto noteID = "note" + juce::String (i + 1);
         const auto stepID = "on" + juce::String (i + 1);
         p.steps[static_cast<size_t> (i)].semitones = static_cast<int> (parameters.getRawParameterValue (noteID)->load());
         p.steps[static_cast<size_t> (i)].enabled = parameters.getRawParameterValue (stepID)->load() >= 0.5f;
+        const auto drumNoteID = "drumNote" + juce::String (i + 1);
+        const auto drumVelID = "drumVel" + juce::String (i + 1);
+        p.drums.steps[static_cast<size_t> (i)].pitch = static_cast<int> (parameters.getRawParameterValue (drumNoteID)->load());
+        p.drums.steps[static_cast<size_t> (i)].velocity = parameters.getRawParameterValue (drumVelID)->load();
     }
     return p;
 }
@@ -145,6 +186,7 @@ void ANKSModularProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::
     const int n = audio.getNumSamples();
     auto* left = channels > 0 ? audio.getWritePointer (0) : nullptr;
     auto* right = channels > 1 ? audio.getWritePointer (1) : nullptr;
+    if (drumTriggerRequested.exchange (false, std::memory_order_acq_rel)) engine.triggerDrum (p);
 
     for (int i = 0; i < n; ++i)
     {
@@ -168,12 +210,13 @@ void ANKSModularProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::
         if (right != nullptr) right[i] = y;
     }
     activeStep.store (p.run && p.seqMode ? engine.getCurrentStep() : -1, std::memory_order_relaxed);
+    activeDrumStep.store (p.drums.run ? engine.getDrumStep() : -1, std::memory_order_relaxed);
 }
 
 void ANKSModularProcessor::getStateInformation (juce::MemoryBlock& dest)
 {
     juce::ValueTree root ("ANKSModularState");
-    root.setProperty ("version", 3, nullptr);
+    root.setProperty ("version", 4, nullptr);
     root.addChild (parameters.copyState(), -1, nullptr);
     juce::ValueTree patch ("PatchCables");
     const auto r = getRoutes();
@@ -191,12 +234,13 @@ void ANKSModularProcessor::setStateInformation (const void* data, int bytes)
         auto parameterTree = root.getChildWithName ("Parameters");
         if (parameterTree.isValid())
         {
-            // A V0.2 state has no VCO2/mixer parameters. Supply defaults rather
-            // than retaining values from whichever newer preset was open before.
-            for (const char* id : {"wave2", "tune2", "fine2", "mix1", "mix2", "mixLevel"})
+            // Fill missing IDs with defaults when loading older states.
+            for (auto* baseParameter : getParameters())
             {
+                const auto* parameter = dynamic_cast<const juce::RangedAudioParameter*> (baseParameter);
+                if (parameter == nullptr) continue;
+                const auto& id = parameter->paramID;
                 if (parameterTree.getChildWithProperty ("id", id).isValid()) continue;
-                const auto* parameter = parameters.getParameter (id);
                 juce::ValueTree child ("PARAM");
                 child.setProperty ("id", id, nullptr);
                 child.setProperty ("value", parameter->convertFrom0to1 (parameter->getDefaultValue()), nullptr);

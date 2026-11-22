@@ -9,7 +9,7 @@ if errorlevel 1 (
 )
 cmake -S . -B build -G "Visual Studio 17 2022" -A x64
 if errorlevel 1 goto :fail
-cmake --build build --config Release --parallel 4 --target MOOGER_VST3 MOOGER_Standalone anks_audio_smoke mooger_modules
+cmake --build build --config Release --parallel 4 --target MOOGER_VST3 MOOGER_Standalone anks_audio_smoke mooger_modules mooger_percussion mooger_processor_tests
 if errorlevel 1 goto :fail
 ctest --test-dir build -C Release --output-on-failure
 if errorlevel 1 goto :fail

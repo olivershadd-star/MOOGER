@@ -7,6 +7,7 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include "PercussionEngine.h"
 
 namespace anks
 {
@@ -18,7 +19,8 @@ enum class Port : int
     filterCV, vcaIn, vcaCV, vcaOut, envGate, envCV, lfoCV,
     outputIn,
     // Append ports to preserve saved V0.2 cable indices.
-    osc2Pitch, osc2Out, mixerIn1, mixerIn2, mixerOut, count
+    osc2Pitch, osc2Out, mixerIn1, mixerIn2, mixerOut,
+    drumOut, drumMixIn, count
 };
 constexpr int portCount = static_cast<int> (Port::count);
 constexpr int index (Port p) noexcept { return static_cast<int> (p); }
@@ -28,7 +30,7 @@ constexpr bool isOutput (Port p) noexcept
     {
         case Port::seqPitch: case Port::seqGate: case Port::oscOut:
         case Port::filterOut: case Port::vcaOut: case Port::envCV:
-        case Port::lfoCV: case Port::osc2Out: case Port::mixerOut: return true;
+        case Port::lfoCV: case Port::osc2Out: case Port::mixerOut: case Port::drumOut: return true;
         default: return false;
     }
 }
@@ -40,16 +42,17 @@ constexpr bool validConnection (Port src, Port dst) noexcept
         case Port::oscPitch: case Port::osc2Pitch: return src == Port::seqPitch;
         case Port::envGate: return src == Port::seqGate;
         case Port::mixerIn1: case Port::mixerIn2:
-            return src == Port::oscOut || src == Port::osc2Out;
+            return src == Port::oscOut || src == Port::osc2Out || src == Port::drumOut;
         case Port::filterIn:
-            return src == Port::oscOut || src == Port::osc2Out || src == Port::mixerOut;
+            return src == Port::oscOut || src == Port::osc2Out || src == Port::mixerOut || src == Port::drumOut;
         case Port::filterCV: return src == Port::lfoCV || src == Port::envCV;
         case Port::vcaIn:
-            return src == Port::oscOut || src == Port::osc2Out || src == Port::mixerOut || src == Port::filterOut;
+            return src == Port::oscOut || src == Port::osc2Out || src == Port::mixerOut || src == Port::filterOut || src == Port::drumOut;
         case Port::vcaCV: return src == Port::envCV || src == Port::lfoCV;
         case Port::outputIn:
             return src == Port::vcaOut || src == Port::filterOut || src == Port::oscOut
-                || src == Port::osc2Out || src == Port::mixerOut;
+                || src == Port::osc2Out || src == Port::mixerOut || src == Port::drumOut;
+        case Port::drumMixIn: return src == Port::drumOut;
         default: return false;
     }
 }
@@ -70,6 +73,7 @@ struct Routes
         connect (Port::filterOut, Port::vcaIn);
         connect (Port::envCV, Port::vcaCV);
         connect (Port::vcaOut, Port::outputIn);
+        connect (Port::drumOut, Port::drumMixIn);
     }
     bool connect (Port src, Port dst) noexcept
     {
@@ -109,6 +113,7 @@ struct Parameters
     float master = 0.42f;
     bool seqMode = true;
     bool run = false;
+    DrumParameters drums;
     std::array<Step, 8> steps { Step {0,true}, Step {0,true}, Step {3,true}, Step {7,true},
                                 Step {0,true}, Step {5,true}, Step {3,true}, Step {10,true} };
 };
@@ -169,6 +174,7 @@ public:
     void prepare (double newRate) noexcept
     {
         sr = std::max (8000.0, newRate);
+        percussion.prepare (sr);
         reset();
     }
     void reset() noexcept
@@ -176,6 +182,7 @@ public:
         phase = phase2 = lfoPhase = 0.0;
         filt1 = filt2 = 0.0;
         envelope.reset();
+        percussion.reset();
         currentFrequency = targetFrequency = 130.81278265;
         currentFrequency2 = 130.81278265;
         midiPitch = 48;
@@ -187,6 +194,8 @@ public:
         lastRunning = false;
     }
     int getCurrentStep() const noexcept { return sequenceIndex; }
+    int getDrumStep() const noexcept { return percussion.currentStep(); }
+    void triggerDrum (const Parameters& p) noexcept { percussion.trigger (p.drums); }
     void noteOn (int midiNote, const Parameters& p, const Routes& r) noexcept
     {
         midiNote = std::clamp (midiNote, 0, 127);
@@ -208,6 +217,7 @@ public:
     }
     float process (const Parameters& p, const Routes& r) noexcept
     {
+        const double drumVoice = percussion.process (p.drums, p.bpm);
         const bool runSequence = p.run && p.seqMode;
         if (runSequence && ! lastRunning) startSequence();
         if (! runSequence && lastRunning)
@@ -259,6 +269,7 @@ public:
             {
                 case index (Port::oscOut): return source;
                 case index (Port::osc2Out): return source2;
+                case index (Port::drumOut): return drumVoice;
                 default: return 0.0;
             }
         };
@@ -306,7 +317,8 @@ public:
         }
         smoothMaster += (std::clamp (static_cast<double> (p.master), 0.0, 1.0) - smoothMaster)
                         * std::min (1.0, 1.0 / (sr * 0.010));
-        const double limited = std::tanh (audioOut * smoothMaster * 1.5) * 0.80;
+        const double drumBus = r.connected (Port::drumOut, Port::drumMixIn) ? drumVoice : 0.0;
+        const double limited = std::tanh ((audioOut + drumBus) * smoothMaster * 1.5) * 0.80;
         return std::isfinite (limited) ? static_cast<float> (limited) : 0.0f;
     }
 
@@ -365,5 +377,6 @@ private:
     int gateSamples = 0, sequenceIndex = -1, midiPitch = 48;
     bool lastRunning = false;
     Envelope envelope;
+    PercussionEngine percussion;
 };
 } // namespace anks

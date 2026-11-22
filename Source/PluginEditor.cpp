@@ -34,10 +34,15 @@ ANKSModularEditor::ANKSModularEditor (ANKSModularProcessor& p)
           {anks::Port::osc2Out, {866.f, 599.f}, "AUDIO OUT", 0},
           {anks::Port::mixerIn1, {930.f, 599.f}, "INPUT 1", 0},
           {anks::Port::mixerIn2, {995.f, 599.f}, "INPUT 2", 0},
-          {anks::Port::mixerOut, {1070.f, 599.f}, "MIX OUT", 0}
+          {anks::Port::mixerOut, {1070.f, 599.f}, "MIX OUT", 0},
+          {anks::Port::drumOut, {604.f, 901.f}, "DRUM OUT", 0},
+          {anks::Port::drumMixIn, {1080.f, 365.f}, "DRUM IN", 0}
       }}
 {
-    setSize (1120, 670);
+    setResizable (true, true);
+    setResizeLimits (784, 665, 1344, 1140);
+    getConstrainer()->setFixedAspectRatio (1120.0 / 950.0);
+    setSize (1120, 950);
     setLookAndFeel (&skin);
     skin.setColour (juce::Slider::thumbColourId, juce::Colour (blue));
     skin.setColour (juce::Slider::rotarySliderFillColourId, juce::Colour (blue));
@@ -123,6 +128,56 @@ ANKSModularEditor::ANKSModularEditor (ANKSModularProcessor& p)
     addKnob ("lfoRate", "RATE", 469, 466, 90, 114);
     addKnob ("lfoDepth", "DEPTH", 574, 466, 90, 114);
 
+    drumRunButton.setButtonText ("DRUM RUN");
+    drumRunButton.setClickingTogglesState (true);
+    drumRunButton.setBounds (250, 658, 100, 29);
+    addAndMakeVisible (drumRunButton);
+    drumRunAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (processor.parameters, "drumRun", drumRunButton);
+    drumTriggerButton.setButtonText ("HIT");
+    drumTriggerButton.setBounds (359, 658, 80, 29);
+    drumTriggerButton.onClick = [this] { processor.requestDrumTrigger(); };
+    addAndMakeVisible (drumTriggerButton);
+    drumFollowButton.setButtonText ("LINK BPM");
+    drumFollowButton.setClickingTogglesState (true);
+    drumFollowButton.setTooltip ("Use the core BPM. DRUM RUN remains independent; this does not sync to the DAW transport.");
+    drumFollowButton.setBounds (448, 658, 110, 29);
+    addAndMakeVisible (drumFollowButton);
+    drumFollowAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (processor.parameters, "drumFollow", drumFollowButton);
+    drumWave.addItemList ({"TRIANGLE", "SQUARE"}, 1);
+    drumWave.setBounds (570, 658, 112, 29);
+    addAndMakeVisible (drumWave);
+    drumWaveAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (processor.parameters, "drumWave", drumWave);
+
+    addKnob ("drumBpm", "FREE BPM", 30, 715, 84, 82);
+    addKnob ("drumPitch", "BASE Hz", 126, 715, 84, 82);
+    addKnob ("drumRatio", "VCO2 RATIO", 222, 715, 84, 82);
+    addKnob ("drumTone", "VCO2 MIX", 318, 715, 84, 82);
+    addKnob ("drumNoise", "NOISE", 414, 715, 84, 82);
+    addKnob ("drumFm", "FM", 510, 715, 84, 82);
+    addKnob ("drumDecay", "AMP DECAY", 30, 810, 84, 82);
+    addKnob ("drumPitchDecay", "PITCH DECAY", 126, 810, 84, 82);
+    addKnob ("drumPitchDepth", "PITCH DEPTH", 222, 810, 84, 82);
+    addKnob ("drumCutoff", "CUTOFF", 318, 810, 84, 82);
+    addKnob ("drumRes", "RESONANCE", 414, 810, 84, 82);
+    addKnob ("drumLevel", "DRUM LEVEL", 510, 810, 84, 82);
+    for (int i = 0; i < 8; ++i)
+    {
+        const auto suffix = juce::String (i + 1);
+        for (int row = 0; row < 2; ++row)
+        {
+            auto slider = std::make_unique<juce::Slider>();
+            slider->setSliderStyle (juce::Slider::LinearVertical);
+            slider->setTextBoxStyle (juce::Slider::TextBoxBelow, false, 43, 18);
+            slider->setBounds (645 + i * 54, row == 0 ? 731 : 828, 43, 75);
+            slider->setNumDecimalPlacesToDisplay (row == 0 ? 0 : 2);
+            slider->setTooltip ((row == 0 ? "Pitch in semitones, step " : "Velocity (0 = rest), step ") + suffix);
+            addAndMakeVisible (*slider);
+            const auto id = (row == 0 ? "drumNote" : "drumVel") + suffix;
+            stepAttachments.push_back (std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (processor.parameters, id, *slider));
+            (row == 0 ? drumPitchSliders : drumVelocitySliders)[static_cast<size_t> (i)] = std::move (slider);
+        }
+    }
+
     startTimerHz (12);
 }
 
@@ -131,8 +186,17 @@ ANKSModularEditor::~ANKSModularEditor()
     stopTimer();
     // Attachments must be destroyed before widgets and before LookAndFeel.
     runAttachment.reset(); seqAttachment.reset(); waveAttachment.reset(); wave2Attachment.reset();
+    drumRunAttachment.reset(); drumFollowAttachment.reset(); drumWaveAttachment.reset();
     stepAttachments.clear(); stepButtonAttachments.clear(); knobAttachments.clear();
     setLookAndFeel (nullptr);
+}
+
+void ANKSModularEditor::resized()
+{
+    const auto transform = juce::AffineTransform::scale (getWidth() / 1120.0f);
+    for (auto* child : getChildren())
+        if (dynamic_cast<juce::ResizableCornerComponent*> (child) == nullptr)
+            child->setTransform (transform);
 }
 
 void ANKSModularEditor::addKnob (const juce::String& id, const juce::String& title,
@@ -214,6 +278,7 @@ void ANKSModularEditor::drawJack (juce::Graphics& g, const Jack& jack)
 
 void ANKSModularEditor::paint (juce::Graphics& g)
 {
+    g.addTransform (juce::AffineTransform::scale (getWidth() / 1120.0f));
     g.fillAll (juce::Colour (background));
     g.setColour (juce::Colour (blue));
     g.setFont (juce::FontOptions (27.0f, juce::Font::bold));
@@ -221,7 +286,7 @@ void ANKSModularEditor::paint (juce::Graphics& g)
     g.setColour (juce::Colour (red)); g.fillEllipse (210, 20, 7, 7);
     g.setColour (juce::Colour (muted));
     g.setFont (juce::FontOptions (12.0f));
-    g.drawText ("MOTHER CORE  /  DUAL VCO  /  NATIVE VST3", 437, 10, 472, 23, juce::Justification::centred);
+    g.drawText ("MOTHER CORE  /  DUAL VCO + PERCUSSION  /  NATIVE VST3", 420, 10, 560, 23, juce::Justification::centred);
     g.setColour (juce::Colour (outline)); g.drawLine (18, 86, 1102, 86, 1);
 
     drawModule (g, {18, 96, 326, 295}, "01   SEQUENCER", "8-step pitch and gate / C3 base");
@@ -233,6 +298,18 @@ void ANKSModularEditor::paint (juce::Graphics& g)
     drawModule (g, {442, 403, 250, 223}, "07   LFO", "Cyclic modulation");
     drawModule (g, {704, 403, 190, 223}, "08   VCO 2", "Independent pitch + wave");
     drawModule (g, {906, 403, 196, 223}, "09   MIXER", "Two inputs / output level");
+    drawModule (g, {18, 650, 1084, 272}, "10   PERCUSSION", "Independent voice / 16th-note sequencer / velocity 0 = rest");
+    g.setColour (juce::Colour (muted)); g.setFont (juce::FontOptions (11.0f));
+    g.drawText ("PITCH / SEMITONES", 645, 710, 425, 18, juce::Justification::centred);
+    g.drawText ("VELOCITY", 645, 807, 425, 18, juce::Justification::centred);
+    const int drumStep = processor.displayedDrumStep();
+    for (int i = 0; i < 8; ++i)
+    {
+        const auto box = juce::Rectangle<int> (645 + i * 54, 690, 43, 18);
+        if (drumStep == i) { g.setColour (juce::Colour (red)); g.fillRoundedRectangle (box.toFloat(), 4); }
+        g.setColour (juce::Colour (silver));
+        g.drawText (juce::String (i + 1), box, juce::Justification::centred);
+    }
 
     const auto step = processor.displayedStep();
     g.setFont (juce::FontOptions (11.0f, juce::Font::bold));
@@ -285,6 +362,8 @@ void ANKSModularEditor::paint (juce::Graphics& g)
     portsLabel (anks::Port::vcaCV, "CV", 789, 379);
     portsLabel (anks::Port::vcaOut, "OUT", 843, 379);
     portsLabel (anks::Port::outputIn, "IN", 903, 379);
+    g.drawText ("DRUM IN", 1046, 379, 55, 15, juce::Justification::centred);
+    g.drawText ("OUT", 580, 910, 50, 12, juce::Justification::centred);
     g.drawText ("GATE", 26, 610, 60, 16, juce::Justification::centred);
     g.drawText ("CV OUT", 368, 610, 80, 16, juce::Justification::centred);
     g.drawText ("CV OUT", 635, 610, 74, 16, juce::Justification::centred);
@@ -296,12 +375,13 @@ void ANKSModularEditor::paint (juce::Graphics& g)
     g.drawText ("OUT", 1045, 610, 50, 16, juce::Justification::centred);
     g.setColour (juce::Colour (muted)); g.setFont (juce::FontOptions (11.0f));
     g.drawText (selectedJack >= 0 ? "PATCH: choose an input socket or drag to it"
-                : "MOOGER V0.3  /  Click output then input to patch; click an input to unplug  /  SEQ: RUN  /  MIDI: play notes",
-                18, 639, 1085, 18, juce::Justification::centred);
+                : "MOOGER V0.4  /  Click output then input to patch; click an input to unplug  /  DRUM RUN is independent",
+                18, 930, 1085, 18, juce::Justification::centred);
 }
 
 int ANKSModularEditor::hitJack (juce::Point<float> mouse) const
 {
+    mouse /= getWidth() / 1120.0f;
     for (int i = 0; i < static_cast<int> (jacks.size()); ++i)
         if (jacks[static_cast<size_t> (i)].position.getDistanceFrom (mouse) <= 15.0f)
             return i;
@@ -317,7 +397,7 @@ void ANKSModularEditor::mouseDown (const juce::MouseEvent& e)
     {
         selectedJack = selectedJack == i ? -1 : i;
         dragging = false;
-        dragPosition = e.position;
+        dragPosition = e.position / (getWidth() / 1120.0f);
     }
     else if (selectedJack >= 0)
     {
@@ -333,7 +413,7 @@ void ANKSModularEditor::mouseDrag (const juce::MouseEvent& e)
     if (selectedJack >= 0)
     {
         dragging = true;
-        dragPosition = e.position;
+        dragPosition = e.position / (getWidth() / 1120.0f);
         repaint();
     }
 }

@@ -1,21 +1,18 @@
-# MOOGER V0.3 — vérifications du 20 novembre 2026
+# MOOGER V0.4 — validation
 
-## Réalisées
+## Localement sur Linux
 
-- Configuration CMake Release et compilation indépendante du DSP : réussite.
-- CTest : 2/2 tests réussis, ANKS_DSP_Smoke et MOOGER_Modules.
-- Séquence huit pas, stabilité, sortie non silencieuse, marge de sortie, déconnexion OUTPUT, LFO/filtre et relâchement des notes : réussite à 44,1 / 48 / 96 kHz.
-- VCO2 : note MIDI 69 à 440 Hz, octave réglée pendant la note à 880 Hz, désaccord fin +50 cents, pitch indépendant après déconnexion, indépendance par rapport à VCO1 : réussite aux trois fréquences.
-- Mixer : contribution de chaque oscillateur, quatre formes d'onde VCO2, déconnexion de son entrée, branchement alternatif VCO1, mute du niveau général, refus des boucles et d'un câble CV sur entrée audio : réussite.
-- Balayages brusques des gains et du niveau sur sources sinusoïdales : variations entre échantillons inférieures à 0,02 dans ce scénario. Ce contrôle vise les gains du mixer et ne garantit pas l'absence de tout clic audible.
-- Vérification syntaxique C++17 de PluginProcessor.cpp et PluginEditor.cpp contre JUCE 8.0.17-security, commit dabd5ad13cd869cba41046947fffc8e5ce5cd662 : réussite. Avertissement existant pour MidiBuffer::Iterator déprécié.
+- CMake Release sans JUCE : 3/3 tests DSP réussis.
+- Régression du cœur mélodique et des deux VCO/mixer : réussite.
+- Percussion à 44,1/48/96 kHz : huit pas, hauteurs/vélocités, silences, déclenchement manuel, arrêt avec fin de résonance, bus débranché et sortie repatchée, tempos liés/indépendants, coexistence avec une note mélodique tenue, extrêmes FM/bruit/résonance/niveaux.
+- Vérification C++17 des sources JUCE et du test d'intégration contre JUCE 8.0.17-security.
 
-## Non vérifiées
+## Vérification Windows prévue par le workflow
 
-- Compilation/liaison complète de JUCE et exécution de l'interface : dépendances de développement Linux absentes (notamment X11/Xlib.h dans la tentative précédente).
-- Exécution du workflow Windows MSVC x64, bundle VST3, EXE autonome et scan Ableton Live 12.
-- Rendu graphique, confort des nouvelles commandes, audio matériel et écoute réelle.
-- Restauration d'état V0.2/V0.3 dans un DAW ; migration préparée dans le code seulement.
-- Traitement MIDI de la couche JUCE, tailles de blocs 64/128/256/512 et charge CPU en DAW.
+- MSVC x64 : VST3, Standalone et test d'intégration JUCE.
+- Quatre tests CTest en Release.
+- Test processeur à 44,1/48/96 kHz et blocs 64/128/256/512.
+- Sauvegarde/restauration des nouveaux paramètres et câbles, chargement d'un état V0.3 reconstruit sans paramètres de percussion.
+- Captures du rack à sa taille normale et réduite dans MOOGER-Rack-Preview.
 
-Le ZIP contient les sources et les scripts, aucun VST3 Windows validé.
+Le rendu et la lecture audio du plugin dans Ableton restent à vérifier sur une machine Windows équipée du DAW. Les tests ne mesurent pas une fidélité au circuit DFAM et ne prouvent pas l'absence de tout clic audible.

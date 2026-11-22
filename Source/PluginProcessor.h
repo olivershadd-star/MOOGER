@@ -20,7 +20,7 @@ public:
     bool acceptsMidi() const override { return true; }
     bool producesMidi() const override { return false; }
     bool isMidiEffect() const override { return false; }
-    double getTailLengthSeconds() const override { return 0.5; }
+    double getTailLengthSeconds() const override { return 6.0; }
     int getNumPrograms() override { return 1; }
     int getCurrentProgram() override { return 0; }
     void setCurrentProgram (int) override {}
@@ -34,6 +34,8 @@ public:
     void resetPatch() noexcept;
     anks::Routes getRoutes() const noexcept;
     int displayedStep() const noexcept { return activeStep.load (std::memory_order_relaxed); }
+    int displayedDrumStep() const noexcept { return activeDrumStep.load (std::memory_order_relaxed); }
+    void requestDrumTrigger() noexcept { drumTriggerRequested.store (true, std::memory_order_release); }
     void requestPreview() noexcept { previewRequested.store (true, std::memory_order_release); }
     juce::AudioProcessorValueTreeState parameters;
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
@@ -43,6 +45,8 @@ private:
     anks::Engine engine;
     std::array<std::atomic<int>, anks::portCount> inputSources {};
     std::atomic<int> activeStep {-1};
+    std::atomic<int> activeDrumStep {-1};
+    std::atomic<bool> drumTriggerRequested {false};
     std::atomic<bool> previewRequested {false};
     int previewCountdown = 0;
     double currentSampleRate = 44100.0;

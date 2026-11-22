@@ -11,7 +11,7 @@ public:
     explicit ANKSModularEditor (ANKSModularProcessor&);
     ~ANKSModularEditor() override;
     void paint (juce::Graphics&) override;
-    void resized() override {}
+    void resized() override;
     void mouseDown (const juce::MouseEvent&) override;
     void mouseDrag (const juce::MouseEvent&) override;
     void mouseUp (const juce::MouseEvent&) override;
@@ -41,13 +41,16 @@ private:
     std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>> knobAttachments;
     std::array<std::unique_ptr<juce::Slider>, 8> stepSliders;
     std::array<std::unique_ptr<juce::ToggleButton>, 8> stepButtons;
+    std::array<std::unique_ptr<juce::Slider>, 8> drumPitchSliders, drumVelocitySliders;
     std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>> stepAttachments;
     std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment>> stepButtonAttachments;
-    juce::ComboBox wave, wave2;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> waveAttachment, wave2Attachment;
+    juce::ComboBox wave, wave2, drumWave;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> waveAttachment, wave2Attachment, drumWaveAttachment;
     juce::TextButton runButton, seqButton, previewButton, resetButton;
+    juce::TextButton drumRunButton, drumTriggerButton, drumFollowButton;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> runAttachment, seqAttachment;
-    const std::array<Jack, 19> jacks;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> drumRunAttachment, drumFollowAttachment;
+    const std::array<Jack, 21> jacks;
     int selectedJack = -1;
     bool dragging = false;
     juce::Point<float> dragPosition;

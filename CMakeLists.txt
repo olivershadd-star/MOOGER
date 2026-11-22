@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(MOOGER VERSION 0.3.0 LANGUAGES C CXX)
+project(MOOGER VERSION 0.4.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -14,6 +14,9 @@ if (ANKS_BUILD_SMOKE_TEST)
     add_executable(mooger_modules Tests/Modules.cpp Source/SynthEngine.h)
     target_compile_features(mooger_modules PRIVATE cxx_std_17)
     add_test(NAME MOOGER_Modules COMMAND mooger_modules)
+    add_executable(mooger_percussion Tests/Percussion.cpp Source/PercussionEngine.h Source/SynthEngine.h)
+    target_compile_features(mooger_percussion PRIVATE cxx_std_17)
+    add_test(NAME MOOGER_Percussion COMMAND mooger_percussion)
 endif()
 
 # Permit independent DSP validation without fetching JUCE or GUI dependencies.
@@ -40,7 +43,7 @@ juce_add_plugin(MOOGER
     PLUGIN_MANUFACTURER_CODE Anks
     PLUGIN_CODE Mo01
     PRODUCT_NAME "MOOGER"
-    DESCRIPTION "Compact dual oscillator semi-modular synthesizer"
+    DESCRIPTION "Compact semi-modular synthesizer with independent percussion"
     FORMATS VST3 Standalone
     IS_SYNTH TRUE
     NEEDS_MIDI_INPUT TRUE
@@ -50,6 +53,7 @@ juce_add_plugin(MOOGER
 
 target_sources(MOOGER PRIVATE
     Source/SynthEngine.h
+    Source/PercussionEngine.h
     Source/PluginProcessor.h
     Source/PluginProcessor.cpp
     Source/PluginEditor.h
@@ -67,4 +71,12 @@ target_link_libraries(MOOGER PRIVATE
     juce::juce_recommended_config_flags
     juce::juce_recommended_lto_flags
     juce::juce_recommended_warning_flags)
+
+if (ANKS_BUILD_SMOKE_TEST)
+    add_executable(mooger_processor_tests Tests/Processor.cpp)
+    target_compile_definitions(mooger_processor_tests PRIVATE JucePlugin_Name="MOOGER" JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
+    target_link_libraries(mooger_processor_tests PRIVATE MOOGER juce::juce_audio_utils juce::juce_audio_processors
+        juce::juce_recommended_config_flags)
+    add_test(NAME MOOGER_Processor COMMAND mooger_processor_tests)
+endif()
 
