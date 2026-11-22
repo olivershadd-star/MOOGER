@@ -1,4 +1,31 @@
-# MOOGER V0.5 — laboratoire semi-modulaire natif
+<div align="center">
+
+# ANKS LABS / MOOGER
+### SEMI-MODULAR SYNTH · PATCHING · CV MODULATION
+
+![Status](https://img.shields.io/badge/STATUS-PROTOTYPE_V0.5-EF343E?style=for-the-badge&labelColor=10151E)
+![Audio](https://img.shields.io/badge/AUDIO-DEVELOPMENT-19B9FF?style=for-the-badge&labelColor=10151E)
+
+**BUILD. BREAK. REWIRE. LISTEN.**
+
+[![ANKS LABS](https://img.shields.io/badge/ANKS_LABS-GITHUB_PROFILE-19B9FF?style=for-the-badge&labelColor=10151E)](https://github.com/olivershadd-star)
+
+</div>
+
+---
+
+## 01 // LE PROJET
+
+**MOOGER** est une création originale d'ANKS Labs : un synthétiseur semi-modulaire natif inspiré par l'approche analogique, avec deux VCO, patching virtuel, VCF/VCA, séquenceur huit pas, contrôles CV et une voix de percussion indépendante. C'est un laboratoire de synthèse, **pas** une émulation de circuits Moog.
+
+> **Statut : prototype v0.5 / test build.** La compilation Windows et les tests automatisés documentés ont réussi ; l'écoute et l'intégration dans Ableton restent à confirmer. Ne pas considérer ce build comme stable.
+
+**[Sources & documentation](https://github.com/olivershadd-star/MOOGER)** · **[Builds de test / GitHub Actions](https://github.com/olivershadd-star/MOOGER/actions)**
+
+---
+
+## Documentation technique existante — MOOGER v0.5
+
 
 Projet ANKS Labs, C++17/JUCE, VST3 Windows x64 et application autonome. Cœur inspiré du Mother-32, second oscillateur, mixer voix rythmique indépendante et laboratoire de modulation CV. La V0.5 ajoute le panneau de modulation ; compilation Windows et cinq tests automatisés réussis (voir TESTS.md). Le chargement et l'écoute dans Ableton restent à vérifier. Le moteur est un synthétiseur natif original ; aucune mesure de fidélité au circuit Mother-32 n'a été effectuée.
 
