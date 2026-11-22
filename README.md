@@ -67,6 +67,8 @@ Les anciens identifiants de paramètres et les quatorze indices de prises V0.2 s
 
 Le rack reste fixe : une voix mélodique monophonique et une voix de percussion indépendante, horloges internes et routage prédéfini. Les modules ne sont pas encore ajoutables ou déplaçables. Le panneau de modulation, la section sous-harmonique, le wavefolder et la génération de séquences restent à développer. Pas de synchronisation au transport du DAW ni de synchronisation dure entre les VCO. La FM est disponible dans la voix de percussion seulement.
 
+Les commandes sans courbe explicite utilisent désormais une courbe linéaire : cela évite la perte de précision observée à l'ouverture de l'éditeur sur la résonance et le sustain. Les valeurs physiques sauvegardées sont conservées ; les anciennes automations enregistrées en valeurs normalisées pour ces commandes restent à vérifier dans le DAW. Les affichages numériques utilisent une précision adaptée à chaque commande.
+
 Les gains du mixer sont lissés. Cela ne garantit pas une absence de clics lors des changements de forme d'onde, des débranchements ou de tous les autres paramètres.
 
 JUCE : AGPLv3 ou licence commerciale selon les conditions de son éditeur. Les anciennes références HTML sont conservées sous Reference à titre historique.

@@ -7,11 +7,20 @@ namespace
 using APVTS = juce::AudioProcessorValueTreeState;
 using ID = juce::ParameterID;
 void addFloat (APVTS::ParameterLayout& l, const char* id, const char* label,
-               float lo, float hi, float def, float skew = 1.0f)
+               float lo, float hi, float def, float skew = 0.5f)
 {
     juce::NormalisableRange<float> r {lo, hi};
     r.setSkewForCentre (lo + (hi - lo) * std::clamp (skew, 0.01f, 0.99f));
-    l.add (std::make_unique<juce::AudioParameterFloat> (ID {id, 1}, label, r, def));
+    const juce::String key (id);
+    int precision = 2;
+    if (key == "bpm" || key == "cutoff" || key == "lfoDepth" || key == "drumBpm"
+        || key == "drumCutoff" || key == "drumPitchDepth") precision = 0;
+    if (key == "tune" || key == "tune2" || key == "fine2" || key == "drumPitch") precision = 1;
+    if (key == "attack" || key == "decay" || key == "release" || key == "drumDecay" || key == "drumPitchDecay") precision = 3;
+    auto attributes = juce::AudioParameterFloatAttributes()
+        .withStringFromValueFunction ([precision] (float value, int) { return juce::String (value, precision); })
+        .withValueFromStringFunction ([] (const juce::String& text) { return text.getFloatValue(); });
+    l.add (std::make_unique<juce::AudioParameterFloat> (ID {id, 1}, label, r, def, attributes));
 }
 }
 

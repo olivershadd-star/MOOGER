@@ -101,6 +101,9 @@ int main()
 
     auto editor = std::unique_ptr<juce::AudioProcessorEditor> (p.createEditor());
     require (editor != nullptr && editor->getWidth() == 1120 && editor->getHeight() == 950, "rack size invalid");
+    require (std::abs (p.parameters.getRawParameterValue ("res")->load() - 1.2f) < 1e-5f, "opening editor changed resonance");
+    require (std::abs (p.parameters.getRawParameterValue ("sustain")->load() - 0.15f) < 1e-5f, "opening editor changed sustain");
+    require (std::abs (p.parameters.getRawParameterValue ("level")->load() - 0.65f) < 1e-5f, "opening editor changed VCA level");
     saveImage (*editor, "MOOGER-rack.png");
     editor->setSize (784, 665);
     saveImage (*editor, "MOOGER-rack-small.png");

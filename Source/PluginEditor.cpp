@@ -78,7 +78,7 @@ ANKSModularEditor::ANKSModularEditor (ANKSModularProcessor& p)
     resetButton.onClick = [this] { processor.resetPatch(); selectedJack = -1; repaint(); };
     addAndMakeVisible (resetButton);
 
-    addKnob ("bpm", "BPM", 310, 23, 84, 62);
+    addKnob ("bpm", "BPM", 310, 4, 84, 80);
     // Eight note steps, each with a switch. A slider changes semitone offset from C3.
     for (int i = 0; i < 8; ++i)
     {
