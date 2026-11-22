@@ -10,11 +10,15 @@
 - AddressSanitizer et UndefinedBehaviorSanitizer sur le test de modulation : réussite.
 - Vérification syntaxique C++17 de l'éditeur, du processeur et du test d'intégration JUCE.
 
-## Prévu par le workflow Windows
+## Réalisé sur Windows 2022 / MSVC x64
 
-- Compilation VST3, EXE et cinq tests CTest en Release.
+[Build validé](https://github.com/olivershadd-star/MOOGER/actions/runs/44973665441), source `437b19b1627ae57bc070becfcc76af99f698c069` : **5/5 tests réussis**.
+
+- Compilation VST3, EXE et cinq tests CTest en Release : réussite.
 - Traitement JUCE aux trois fréquences et blocs 64/128/256/512, sauvegarde des paramètres et câbles CV, migrations V0.3 et V0.4.
 - Vérification de SAMPLE, maintien du S&H, ouverture de l'éditeur sans modification des paramètres et changement de vue sans changement de patch.
-- Captures Windows de la vue modulation, de la vue percussion et de la taille réduite.
+- Captures Windows des vues modulation et percussion, plus taille réduite : relues visuellement.
+- Vérification explicite de la visibilité des boutons SAMPLE et DRUM RUN dans leurs vues respectives : réussite.
+- ZIP téléchargé, somme SHA-256 contrôlée, bundle VST3 et EXE vérifiés au format PE Windows x64.
 
 L'écoute et le chargement dans Ableton Live 12 ne sont pas couverts par ces tests. Pas de mesure de fidélité sonore au CP-251, ni de garantie d'absence de tout transitoire lors d'un changement de câble ou de source.

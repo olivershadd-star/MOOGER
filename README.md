@@ -1,8 +1,8 @@
 # MOOGER V0.5 — laboratoire semi-modulaire natif
 
-Projet ANKS Labs, C++17/JUCE, VST3 Windows x64 et application autonome. Cœur inspiré du Mother-32, second oscillateur, mixer voix rythmique indépendante et laboratoire de modulation CV. La V0.5 ajoute le panneau de modulation ; sa validation Windows est décrite dans TESTS.md. Le chargement et l'écoute dans Ableton restent à vérifier. Le moteur est un synthétiseur natif original ; aucune mesure de fidélité au circuit Mother-32 n'a été effectuée.
+Projet ANKS Labs, C++17/JUCE, VST3 Windows x64 et application autonome. Cœur inspiré du Mother-32, second oscillateur, mixer voix rythmique indépendante et laboratoire de modulation CV. La V0.5 ajoute le panneau de modulation ; compilation Windows et cinq tests automatisés réussis (voir TESTS.md). Le chargement et l'écoute dans Ableton restent à vérifier. Le moteur est un synthétiseur natif original ; aucune mesure de fidélité au circuit Mother-32 n'a été effectuée.
 
-La dernière version validée est disponible dans les artefacts de [GitHub Actions](https://github.com/olivershadd-star/MOOGER/actions).
+[Télécharger la VST3 et l’EXE Windows x64](https://github.com/olivershadd-star/MOOGER/actions/runs/44973665441/artifacts/14734628815) · [Captures des deux vues du rack](https://github.com/olivershadd-star/MOOGER/actions/runs/44973665441/artifacts/14734588908)
 
 ## Cette version
 
@@ -29,8 +29,8 @@ La chaîne utilitaire est prébranchée :
 
 ```text
 NOISE → S&H IN ; LFO SQR → CLOCK IN
-S&H OUT → ATT1 IN → MIX IN1
-LFO du cœur → ATT2 IN → MIX IN2
+S&H OUT → ATT1 IN ; ATT1 OUT → MIX IN1
+LFO CV du cœur → ATT2 IN ; ATT2 OUT → MIX IN2
 MIX + → LAG IN
 ```
 
@@ -38,7 +38,7 @@ Aucune destination sonore n'est ajoutée automatiquement : le patch précédent 
 
 Autres essais : S&H OUT → PITCH CV du VCO 2 pour des hauteurs par paliers ; LFO TRI → AMP CV pour une modulation d'amplitude ; MIX - pour inverser un mouvement. PITCH DEPTH règle la profondeur commune des deux nouvelles entrées de hauteur (0–24 demi-tons), FILTER Hz celle des nouvelles sources vers le filtre (0–8000 Hz), AMP DEPTH celle des nouvelles sources vers le VCA. Les branchements LFO/ENV historiques conservent leur comportement et leurs réglages.
 
-Le CV du VCA remplace son enveloppe quand on change son câble : une modulation peut donc ouvrir le VCA et produire un drone même lorsque le séquenceur est arrêté.
+À AMP DEPTH = 1, une nouvelle source CV à -1 ferme le VCA, 0 donne un demi-niveau et +1 l’ouvre. Le CV du VCA remplace son enveloppe quand on change son câble : une modulation peut donc ouvrir le VCA et produire un drone même lorsque le séquenceur est arrêté.
 
 Le chemin CV est dirigé : sources → S&H → atténuateurs → mixer → lag → destinations. Les liaisons vers des étapes précédentes et les sources audio sur les entrées CV sont refusées. Toute sortie peut alimenter plusieurs entrées compatibles, sans module multiple supplémentaire. Cette version s'inspire des fonctions du CP-251 ; ses plages et son routage sont propres à MOOGER.
 
