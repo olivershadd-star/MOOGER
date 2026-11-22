@@ -1,4 +1,5 @@
 #include "../Source/PluginProcessor.h"
+#include "../Source/PluginEditor.h"
 #include <juce_audio_utils/juce_audio_utils.h>
 #include <cstdlib>
 #include <iostream>
@@ -84,9 +85,12 @@ int main()
     old.setProperty ("version", 3, nullptr);
     auto params = old.getChildWithName ("Parameters");
     for (int i = params.getNumChildren() - 1; i >= 0; --i)
-        if (params.getChild (i).getProperty ("id").toString().startsWith ("drum")) params.removeChild (i, nullptr);
+    {
+        const auto id = params.getChild (i).getProperty ("id").toString();
+        if (id.startsWith ("drum") || id.startsWith ("mod")) params.removeChild (i, nullptr);
+    }
     auto patch = old.getChildWithName ("PatchCables");
-    patch.removeProperty ("in19", nullptr); patch.removeProperty ("in20", nullptr);
+    for (int i = 19; i < anks::portCount; ++i) patch.removeProperty ("in" + juce::String (i), nullptr);
     patch.setProperty ("in17", anks::index (anks::Port::osc2Out), nullptr);
     juce::MemoryBlock legacy;
     juce::AudioProcessor::copyXmlToBinary (*old.createXml(), legacy);
@@ -99,13 +103,61 @@ int main()
     p.requestDrumTrigger();
     require (render (p, 24000, 128) > 0.01, "HIT request does not reach DSP");
 
+    // New CV parameters and cables survive a round trip.
+    set (p, "modRate", 4.5f); set (p, "modOffset", 0.3f); set (p, "modRise", 0.01f);
+    p.connect (anks::Port::modLagOut, anks::Port::filterCV);
+    p.connect (anks::Port::modMixOut, anks::Port::oscMod1In);
+    juce::MemoryBlock modulationState;
+    p.getStateInformation (modulationState);
+    set (p, "modRate", 9); set (p, "modOffset", 0);
+    p.disconnect (anks::Port::filterCV); p.disconnect (anks::Port::oscMod1In);
+    p.setStateInformation (modulationState.getData(), static_cast<int> (modulationState.getSize()));
+    require (std::abs (p.parameters.getRawParameterValue ("modRate")->load() - 4.5f) < 1e-6f, "modulation rate state lost");
+    require (std::abs (p.parameters.getRawParameterValue ("modOffset")->load() - 0.3f) < 1e-6f, "modulation offset state lost");
+    require (p.getRoutes().connected (anks::Port::modLagOut, anks::Port::filterCV), "modulation filter cable state lost");
+    require (p.getRoutes().connected (anks::Port::modMixOut, anks::Port::oscMod1In), "pitch modulation cable state lost");
+
+    auto modXml = juce::AudioProcessor::getXmlFromBinary (modulationState.getData(), static_cast<int> (modulationState.getSize()));
+    require (modXml != nullptr, "modulation XML invalid");
+    auto v04 = juce::ValueTree::fromXml (*modXml);
+    v04.setProperty ("version", 4, nullptr);
+    auto v04Params = v04.getChildWithName ("Parameters");
+    for (int i = v04Params.getNumChildren() - 1; i >= 0; --i)
+        if (v04Params.getChild (i).getProperty ("id").toString().startsWith ("mod")) v04Params.removeChild (i, nullptr);
+    auto v04Patch = v04.getChildWithName ("PatchCables");
+    for (int i = 21; i < anks::portCount; ++i) v04Patch.removeProperty ("in" + juce::String (i), nullptr);
+    v04Patch.setProperty ("in6", -1, nullptr);
+    juce::MemoryBlock v04State;
+    juce::AudioProcessor::copyXmlToBinary (*v04.createXml(), v04State);
+    p.setStateInformation (v04State.getData(), static_cast<int> (v04State.getSize()));
+    require (p.parameters.getRawParameterValue ("modRate")->load() == 1, "V0.4 rate default not restored");
+    require (p.parameters.getRawParameterValue ("modOffset")->load() == 0, "V0.4 offset default not restored");
+    require (p.getRoutes().source[anks::index (anks::Port::filterCV)] == -1, "V0.4 state acquired a modulation cable");
+    p.prepareToPlay (48000, 128);
+    p.disconnect (anks::Port::modClockIn);
+    render (p, 128, 128);
+    require (p.displayedModulation()[1] == 0, "unclocked S&H captured unexpectedly");
+    p.requestModulationSample(); render (p, 128, 128);
+    const float heldSample = p.displayedModulation()[1];
+    require (heldSample != 0 && std::abs (heldSample) <= 1, "SAMPLE request did not reach DSP");
+    render (p, 128, 128);
+    require (p.displayedModulation()[1] == heldSample, "S&H did not hold between manual samples");
+    p.resetPatch();
+
     auto editor = std::unique_ptr<juce::AudioProcessorEditor> (p.createEditor());
     require (editor != nullptr && editor->getWidth() == 1120 && editor->getHeight() == 950, "rack size invalid");
     require (std::abs (p.parameters.getRawParameterValue ("res")->load() - 1.2f) < 1e-5f, "opening editor changed resonance");
     require (std::abs (p.parameters.getRawParameterValue ("sustain")->load() - 0.15f) < 1e-5f, "opening editor changed sustain");
     require (std::abs (p.parameters.getRawParameterValue ("level")->load() - 0.65f) < 1e-5f, "opening editor changed VCA level");
     saveImage (*editor, "MOOGER-rack.png");
+    auto* rack = dynamic_cast<ANKSModularEditor*> (editor.get());
+    require (rack != nullptr, "unexpected rack type");
+    const auto beforeViewSwitch = p.getRoutes().source;
+    rack->setModulationPanelVisible (false);
+    require (p.getRoutes().source == beforeViewSwitch, "view switch changed patch");
+    saveImage (*editor, "MOOGER-rack-drums.png");
+    rack->setModulationPanelVisible (true);
     editor->setSize (784, 665);
     saveImage (*editor, "MOOGER-rack-small.png");
-    std::cout << "PASS: JUCE 3 rates x 4 block sizes, parameter/cable state, legacy migration, HIT, editor previews\n";
+    std::cout << "PASS: JUCE 3 rates x 4 block sizes, CV/percussion state, V0.3/V0.4 migration, HIT/SAMPLE, panel switching and editor previews\n";
 }

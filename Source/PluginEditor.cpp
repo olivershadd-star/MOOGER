@@ -36,7 +36,27 @@ ANKSModularEditor::ANKSModularEditor (ANKSModularProcessor& p)
           {anks::Port::mixerIn2, {995.f, 599.f}, "INPUT 2", 0},
           {anks::Port::mixerOut, {1070.f, 599.f}, "MIX OUT", 0},
           {anks::Port::drumOut, {604.f, 901.f}, "DRUM OUT", 0},
-          {anks::Port::drumMixIn, {1080.f, 365.f}, "DRUM IN", 0}
+          {anks::Port::drumMixIn, {1080.f, 365.f}, "DRUM IN", 0},
+          {anks::Port::modTriangle, {53.f, 853.f}, "LFO TRI", 3},
+          {anks::Port::modSquare, {167.f, 853.f}, "LFO SQR", 3},
+          {anks::Port::modNoise, {281.f, 853.f}, "NOISE", 3},
+          {anks::Port::modSampleIn, {395.f, 853.f}, "S&H IN", 3},
+          {anks::Port::modClockIn, {509.f, 853.f}, "CLOCK IN", 2},
+          {anks::Port::modSampleOut, {623.f, 853.f}, "S&H OUT", 3},
+          {anks::Port::modAtt1In, {737.f, 853.f}, "ATT1 IN", 3},
+          {anks::Port::modAtt1Out, {851.f, 853.f}, "ATT1 OUT", 3},
+          {anks::Port::modAtt2In, {965.f, 853.f}, "ATT2 IN", 3},
+          {anks::Port::modAtt2Out, {53.f, 898.f}, "ATT2 OUT", 3},
+          {anks::Port::modMixIn1, {167.f, 898.f}, "MIX IN1", 3},
+          {anks::Port::modMixIn2, {281.f, 898.f}, "MIX IN2", 3},
+          {anks::Port::modMixIn3, {395.f, 898.f}, "MIX IN3", 3},
+          {anks::Port::modMixIn4, {509.f, 898.f}, "MIX IN4", 3},
+          {anks::Port::modMixOut, {623.f, 898.f}, "MIX +", 3},
+          {anks::Port::modInvertOut, {737.f, 898.f}, "MIX -", 3},
+          {anks::Port::modLagIn, {851.f, 898.f}, "LAG IN", 3},
+          {anks::Port::modLagOut, {965.f, 898.f}, "LAG OUT", 3},
+          {anks::Port::oscMod1In, {438.f, 365.f}, "PITCH CV", 3},
+          {anks::Port::oscMod2In, {799.f, 599.f}, "PITCH CV", 3}
       }}
 {
     setResizable (true, true);
@@ -77,6 +97,10 @@ ANKSModularEditor::ANKSModularEditor (ANKSModularProcessor& p)
     resetButton.setBounds (828, 39, 145, 31);
     resetButton.onClick = [this] { processor.resetPatch(); selectedJack = -1; repaint(); };
     addAndMakeVisible (resetButton);
+    panelButton.setClickingTogglesState (true);
+    panelButton.setBounds (984, 39, 118, 31);
+    panelButton.onClick = [this] { setModulationPanelVisible (panelButton.getToggleState()); };
+    addAndMakeVisible (panelButton);
 
     addKnob ("bpm", "BPM", 310, 4, 84, 80);
     // Eight note steps, each with a switch. A slider changes semitone offset from C3.
@@ -128,6 +152,7 @@ ANKSModularEditor::ANKSModularEditor (ANKSModularProcessor& p)
     addKnob ("lfoRate", "RATE", 469, 466, 90, 114);
     addKnob ("lfoDepth", "DEPTH", 574, 466, 90, 114);
 
+    const int drumControlsStart = getNumChildComponents();
     drumRunButton.setButtonText ("DRUM RUN");
     drumRunButton.setClickingTogglesState (true);
     drumRunButton.setBounds (250, 658, 100, 29);
@@ -178,7 +203,46 @@ ANKSModularEditor::ANKSModularEditor (ANKSModularProcessor& p)
         }
     }
 
+    for (int i = drumControlsStart; i < getNumChildComponents(); ++i)
+        drumControls.push_back (getChildComponent (i));
+    const int modulationControlsStart = getNumChildComponents();
+    sampleButton.setButtonText ("SAMPLE");
+    sampleButton.setBounds (280, 658, 100, 29);
+    sampleButton.onClick = [this] { processor.requestModulationSample(); };
+    addAndMakeVisible (sampleButton);
+    animateButton.setButtonText ("ANIMATE FILTER");
+    animateButton.setTooltip ("Connect LAG OUT to FILTER CV. The utility chain is prepatched; RUN or MIDI notes supply audio.");
+    animateButton.setBounds (390, 658, 146, 29);
+    animateButton.onClick = [this] { processor.connect (anks::Port::modLagOut, anks::Port::filterCV); repaint(); };
+    addAndMakeVisible (animateButton);
+    const char* ids[] = {"modRate", "modAtten1", "modAtten2", "modMix1", "modMix2", "modOffset",
+                         "modRise", "modFall", "modLevel", "modPitchDepth", "modFilterDepth", "modAmpDepth"};
+    const char* names[] = {"LFO Hz", "ATT 1", "ATT 2", "MIX 1", "MIX 2", "OFFSET",
+                           "RISE s", "FALL s", "CV LEVEL", "PITCH DEPTH", "FILTER Hz", "AMP DEPTH"};
+    for (int i = 0; i < 12; ++i) addKnob (ids[i], names[i], 30 + i * 88, 715, 82, 94);
+    for (int i = modulationControlsStart; i < getNumChildComponents(); ++i)
+        modulationControls.push_back (getChildComponent (i));
+    setModulationPanelVisible (true);
     startTimerHz (12);
+}
+
+void ANKSModularEditor::setModulationPanelVisible (bool show)
+{
+    modulationPanelVisible = show;
+    for (auto* control : drumControls) control->setVisible (! show);
+    for (auto* control : modulationControls) control->setVisible (show);
+    panelButton.setToggleState (show, juce::dontSendNotification);
+    panelButton.setButtonText (show ? "DRUM VIEW" : "MOD VIEW");
+    selectedJack = -1; dragging = false;
+    repaint();
+}
+
+bool ANKSModularEditor::jackVisible (const Jack& jack) const noexcept
+{
+    if (jack.id == anks::Port::drumOut) return ! modulationPanelVisible;
+    if (anks::index (jack.id) >= anks::index (anks::Port::modTriangle)
+        && anks::index (jack.id) <= anks::index (anks::Port::modLagOut)) return modulationPanelVisible;
+    return true;
 }
 
 ANKSModularEditor::~ANKSModularEditor()
@@ -286,7 +350,7 @@ void ANKSModularEditor::paint (juce::Graphics& g)
     g.setColour (juce::Colour (red)); g.fillEllipse (210, 20, 7, 7);
     g.setColour (juce::Colour (muted));
     g.setFont (juce::FontOptions (12.0f));
-    g.drawText ("MOTHER CORE  /  DUAL VCO + PERCUSSION  /  NATIVE VST3", 420, 10, 560, 23, juce::Justification::centred);
+    g.drawText ("MOTHER CORE  /  PERCUSSION + CV LAB  /  NATIVE VST3", 420, 10, 560, 23, juce::Justification::centred);
     g.setColour (juce::Colour (outline)); g.drawLine (18, 86, 1102, 86, 1);
 
     drawModule (g, {18, 96, 326, 295}, "01   SEQUENCER", "8-step pitch and gate / C3 base");
@@ -298,17 +362,29 @@ void ANKSModularEditor::paint (juce::Graphics& g)
     drawModule (g, {442, 403, 250, 223}, "07   LFO", "Cyclic modulation");
     drawModule (g, {704, 403, 190, 223}, "08   VCO 2", "Independent pitch + wave");
     drawModule (g, {906, 403, 196, 223}, "09   MIXER", "Two inputs / output level");
-    drawModule (g, {18, 650, 1084, 272}, "10   PERCUSSION", "Independent voice / 16th-note sequencer / velocity 0 = rest");
-    g.setColour (juce::Colour (muted)); g.setFont (juce::FontOptions (11.0f));
-    g.drawText ("PITCH / SEMITONES", 645, 710, 425, 18, juce::Justification::centred);
-    g.drawText ("VELOCITY", 645, 807, 425, 18, juce::Justification::centred);
-    const int drumStep = processor.displayedDrumStep();
-    for (int i = 0; i < 8; ++i)
+    if (modulationPanelVisible)
     {
-        const auto box = juce::Rectangle<int> (645 + i * 54, 690, 43, 18);
-        if (drumStep == i) { g.setColour (juce::Colour (red)); g.fillRoundedRectangle (box.toFloat(), 4); }
-        g.setColour (juce::Colour (silver));
-        g.drawText (juce::String (i + 1), box, juce::Justification::centred);
+        drawModule (g, {18, 650, 1084, 272}, "11   MODULATION", "LFO + noise / sample & hold / attenuators / 4-input CV mixer / lag");
+        const auto values = processor.displayedModulation();
+        g.setColour (juce::Colour (muted)); g.setFont (juce::FontOptions (11.0f));
+        g.drawText ("TRI " + juce::String (values[0], 2) + "   S&H " + juce::String (values[1], 2)
+                    + "   LAG " + juce::String (values[2], 2) + "   /   CV -1..+1",
+                    550, 661, 530, 24, juce::Justification::centredRight);
+    }
+    else
+    {
+        drawModule (g, {18, 650, 1084, 272}, "10   PERCUSSION", "Independent voice / 16th-note sequencer / velocity 0 = rest");
+        g.setColour (juce::Colour (muted)); g.setFont (juce::FontOptions (11.0f));
+        g.drawText ("PITCH / SEMITONES", 645, 710, 425, 18, juce::Justification::centred);
+        g.drawText ("VELOCITY", 645, 807, 425, 18, juce::Justification::centred);
+        const int drumStep = processor.displayedDrumStep();
+        for (int i = 0; i < 8; ++i)
+        {
+            const auto box = juce::Rectangle<int> (645 + i * 54, 690, 43, 18);
+            if (drumStep == i) { g.setColour (juce::Colour (red)); g.fillRoundedRectangle (box.toFloat(), 4); }
+            g.setColour (juce::Colour (silver));
+            g.drawText (juce::String (i + 1), box, juce::Justification::centred);
+        }
     }
 
     const auto step = processor.displayedStep();
@@ -318,9 +394,9 @@ void ANKSModularEditor::paint (juce::Graphics& g)
         const int x = 35 + i * 37;
         const auto active = step == i;
         g.setColour (active ? juce::Colour (blue) : juce::Colour (muted));
-        if (active) g.fillRoundedRectangle (float (x), 144, 28, 21, 4);
+        if (active) g.fillRoundedRectangle (float (x), 157, 28, 18, 4);
         g.setColour (active ? juce::Colour (background) : juce::Colour (muted));
-        g.drawText (juce::String (i + 1), x, 143, 28, 23, juce::Justification::centred);
+        g.drawText (juce::String (i + 1), x, 156, 28, 20, juce::Justification::centred);
         g.setColour (juce::Colour (silver));
         const int offset = static_cast<int> (processor.parameters.getRawParameterValue ("note" + juce::String (i + 1))->load());
         g.drawText ((offset >= 0 ? "+" : "") + juce::String (offset), x - 2, 307, 32, 19, juce::Justification::centred);
@@ -334,48 +410,29 @@ void ANKSModularEditor::paint (juce::Graphics& g)
     const auto route = processor.getRoutes();
     for (const auto& dst : jacks)
     {
-        if (anks::isOutput (dst.id)) continue;
+        if (! jackVisible (dst) || anks::isOutput (dst.id)) continue;
         const int source = route.source[static_cast<size_t> (anks::index (dst.id))];
         if (source < 0) continue;
         for (const auto& src : jacks)
-            if (anks::index (src.id) == source)
+            if (jackVisible (src) && anks::index (src.id) == source)
                 drawCable (g, src.position, dst.position, src.signalType);
     }
     if (dragging && selectedJack >= 0)
         drawCable (g, jacks[static_cast<size_t> (selectedJack)].position,
                    dragPosition, jacks[static_cast<size_t> (selectedJack)].signalType, true);
 
-    for (const auto& jack : jacks) drawJack (g, jack);
+    for (const auto& jack : jacks) if (jackVisible (jack)) drawJack (g, jack);
 
     g.setColour (juce::Colour (muted));
     g.setFont (juce::FontOptions (10.0f));
-    const auto portsLabel = [this, &g] (anks::Port p, const char* s, int x, int y)
-    { juce::ignoreUnused (p); g.drawText (s, x, y, 90, 15, juce::Justification::centred); };
-    portsLabel (anks::Port::seqPitch, "PITCH", 225, 379);
-    portsLabel (anks::Port::seqGate, "GATE", 282, 379);
-    portsLabel (anks::Port::oscPitch, "IN", 358, 379);
-    portsLabel (anks::Port::oscOut, "OUT", 467, 379);
-    portsLabel (anks::Port::filterIn, "IN", 536, 379);
-    portsLabel (anks::Port::filterCV, "CV", 598, 379);
-    portsLabel (anks::Port::filterOut, "OUT", 678, 379);
-    portsLabel (anks::Port::vcaIn, "IN", 735, 379);
-    portsLabel (anks::Port::vcaCV, "CV", 789, 379);
-    portsLabel (anks::Port::vcaOut, "OUT", 843, 379);
-    portsLabel (anks::Port::outputIn, "IN", 903, 379);
-    g.drawText ("DRUM IN", 1046, 379, 55, 15, juce::Justification::centred);
-    g.drawText ("OUT", 580, 910, 50, 12, juce::Justification::centred);
-    g.drawText ("GATE", 26, 610, 60, 16, juce::Justification::centred);
-    g.drawText ("CV OUT", 368, 610, 80, 16, juce::Justification::centred);
-    g.drawText ("CV OUT", 635, 610, 74, 16, juce::Justification::centred);
-
-    g.drawText ("PITCH IN", 707, 610, 60, 16, juce::Justification::centred);
-    g.drawText ("OUT", 841, 610, 50, 16, juce::Justification::centred);
-    g.drawText ("IN 1", 906, 610, 50, 16, juce::Justification::centred);
-    g.drawText ("IN 2", 971, 610, 50, 16, juce::Justification::centred);
-    g.drawText ("OUT", 1045, 610, 50, 16, juce::Justification::centred);
+    for (const auto& jack : jacks)
+        if (jackVisible (jack))
+            g.drawText (jack.label, static_cast<int> (jack.position.x) - 46,
+                        std::min (910, static_cast<int> (jack.position.y) + 13),
+                        92, 12, juce::Justification::centred);
     g.setColour (juce::Colour (muted)); g.setFont (juce::FontOptions (11.0f));
     g.drawText (selectedJack >= 0 ? "PATCH: choose an input socket or drag to it"
-                : "MOOGER V0.4  /  Click output then input to patch; click an input to unplug  /  DRUM RUN is independent",
+                : "MOOGER V0.5  /  Switch MOD / DRUM VIEW without stopping audio  /  Click output then input to patch",
                 18, 930, 1085, 18, juce::Justification::centred);
 }
 
@@ -383,7 +440,8 @@ int ANKSModularEditor::hitJack (juce::Point<float> mouse) const
 {
     mouse /= getWidth() / 1120.0f;
     for (int i = 0; i < static_cast<int> (jacks.size()); ++i)
-        if (jacks[static_cast<size_t> (i)].position.getDistanceFrom (mouse) <= 15.0f)
+        if (jackVisible (jacks[static_cast<size_t> (i)])
+            && jacks[static_cast<size_t> (i)].position.getDistanceFrom (mouse) <= 15.0f)
             return i;
     return -1;
 }

@@ -16,6 +16,7 @@ public:
     void mouseDrag (const juce::MouseEvent&) override;
     void mouseUp (const juce::MouseEvent&) override;
     void mouseDoubleClick (const juce::MouseEvent&) override;
+    void setModulationPanelVisible (bool);
 
 private:
     struct Jack
@@ -31,6 +32,7 @@ private:
     int hitJack (juce::Point<float>) const;
     void drawCable (juce::Graphics&, juce::Point<float>, juce::Point<float>, int, bool preview = false);
     void drawJack (juce::Graphics&, const Jack&);
+    bool jackVisible (const Jack&) const noexcept;
     void drawModule (juce::Graphics&, juce::Rectangle<int>, const juce::String&, const juce::String&);
     static juce::Colour signalColor (int);
 
@@ -48,9 +50,12 @@ private:
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> waveAttachment, wave2Attachment, drumWaveAttachment;
     juce::TextButton runButton, seqButton, previewButton, resetButton;
     juce::TextButton drumRunButton, drumTriggerButton, drumFollowButton;
+    juce::TextButton panelButton, sampleButton, animateButton;
+    std::vector<juce::Component*> drumControls, modulationControls;
+    bool modulationPanelVisible = true;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> runAttachment, seqAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> drumRunAttachment, drumFollowAttachment;
-    const std::array<Jack, 21> jacks;
+    const std::array<Jack, 41> jacks;
     int selectedJack = -1;
     bool dragging = false;
     juce::Point<float> dragPosition;

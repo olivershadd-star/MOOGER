@@ -8,6 +8,7 @@
 #include <cmath>
 #include <cstdint>
 #include "PercussionEngine.h"
+#include "ModulationEngine.h"
 
 namespace anks
 {
@@ -20,7 +21,11 @@ enum class Port : int
     outputIn,
     // Append ports to preserve saved V0.2 cable indices.
     osc2Pitch, osc2Out, mixerIn1, mixerIn2, mixerOut,
-    drumOut, drumMixIn, count
+    drumOut, drumMixIn,
+    modTriangle, modSquare, modNoise, modSampleIn, modClockIn, modSampleOut,
+    modAtt1In, modAtt1Out, modAtt2In, modAtt2Out,
+    modMixIn1, modMixIn2, modMixIn3, modMixIn4, modMixOut, modInvertOut,
+    modLagIn, modLagOut, oscMod1In, oscMod2In, count
 };
 constexpr int portCount = static_cast<int> (Port::count);
 constexpr int index (Port p) noexcept { return static_cast<int> (p); }
@@ -30,8 +35,24 @@ constexpr bool isOutput (Port p) noexcept
     {
         case Port::seqPitch: case Port::seqGate: case Port::oscOut:
         case Port::filterOut: case Port::vcaOut: case Port::envCV:
-        case Port::lfoCV: case Port::osc2Out: case Port::mixerOut: case Port::drumOut: return true;
+        case Port::lfoCV: case Port::osc2Out: case Port::mixerOut: case Port::drumOut:
+        case Port::modTriangle: case Port::modSquare: case Port::modNoise: case Port::modSampleOut:
+        case Port::modAtt1Out: case Port::modAtt2Out: case Port::modMixOut:
+        case Port::modInvertOut: case Port::modLagOut: return true;
         default: return false;
+    }
+}
+constexpr int cvRank (Port p) noexcept
+{
+    switch (p)
+    {
+        case Port::envCV: case Port::lfoCV: case Port::seqGate:
+        case Port::modTriangle: case Port::modSquare: case Port::modNoise: return 0;
+        case Port::modSampleOut: return 1;
+        case Port::modAtt1Out: case Port::modAtt2Out: return 2;
+        case Port::modMixOut: case Port::modInvertOut: return 3;
+        case Port::modLagOut: return 4;
+        default: return -1;
     }
 }
 constexpr bool validConnection (Port src, Port dst) noexcept
@@ -45,10 +66,16 @@ constexpr bool validConnection (Port src, Port dst) noexcept
             return src == Port::oscOut || src == Port::osc2Out || src == Port::drumOut;
         case Port::filterIn:
             return src == Port::oscOut || src == Port::osc2Out || src == Port::mixerOut || src == Port::drumOut;
-        case Port::filterCV: return src == Port::lfoCV || src == Port::envCV;
+        case Port::filterCV: case Port::vcaCV: case Port::oscMod1In: case Port::oscMod2In:
+            return cvRank (src) >= 0 && src != Port::seqGate;
+        case Port::modSampleIn: return cvRank (src) == 0;
+        case Port::modClockIn: return src == Port::modSquare || src == Port::seqGate;
+        case Port::modAtt1In: case Port::modAtt2In: return cvRank (src) >= 0 && cvRank (src) <= 1;
+        case Port::modMixIn1: case Port::modMixIn2: case Port::modMixIn3: case Port::modMixIn4:
+            return cvRank (src) >= 0 && cvRank (src) <= 2;
+        case Port::modLagIn: return cvRank (src) >= 0 && cvRank (src) <= 3;
         case Port::vcaIn:
             return src == Port::oscOut || src == Port::osc2Out || src == Port::mixerOut || src == Port::filterOut || src == Port::drumOut;
-        case Port::vcaCV: return src == Port::envCV || src == Port::lfoCV;
         case Port::outputIn:
             return src == Port::vcaOut || src == Port::filterOut || src == Port::oscOut
                 || src == Port::osc2Out || src == Port::mixerOut || src == Port::drumOut;
@@ -74,6 +101,13 @@ struct Routes
         connect (Port::envCV, Port::vcaCV);
         connect (Port::vcaOut, Port::outputIn);
         connect (Port::drumOut, Port::drumMixIn);
+        connect (Port::modNoise, Port::modSampleIn);
+        connect (Port::modSquare, Port::modClockIn);
+        connect (Port::modSampleOut, Port::modAtt1In);
+        connect (Port::lfoCV, Port::modAtt2In);
+        connect (Port::modAtt1Out, Port::modMixIn1);
+        connect (Port::modAtt2Out, Port::modMixIn2);
+        connect (Port::modMixOut, Port::modLagIn);
     }
     bool connect (Port src, Port dst) noexcept
     {
@@ -114,6 +148,7 @@ struct Parameters
     bool seqMode = true;
     bool run = false;
     DrumParameters drums;
+    ModulationParameters modulation;
     std::array<Step, 8> steps { Step {0,true}, Step {0,true}, Step {3,true}, Step {7,true},
                                 Step {0,true}, Step {5,true}, Step {3,true}, Step {10,true} };
 };
@@ -175,6 +210,7 @@ public:
     {
         sr = std::max (8000.0, newRate);
         percussion.prepare (sr);
+        modulation.prepare (sr);
         reset();
     }
     void reset() noexcept
@@ -183,11 +219,14 @@ public:
         filt1 = filt2 = 0.0;
         envelope.reset();
         percussion.reset();
+        modulation.reset();
+        noteHeld = false;
         currentFrequency = targetFrequency = 130.81278265;
         currentFrequency2 = 130.81278265;
         midiPitch = 48;
         smoothMaster = 0.0;
         smoothMix1 = smoothMix2 = smoothMixLevel = 0.0;
+        smoothModAmp = 1.0; smoothModCutoff = 1200.0;
         samplesToStep = 0.0;
         gateSamples = 0;
         sequenceIndex = -1;
@@ -196,15 +235,19 @@ public:
     int getCurrentStep() const noexcept { return sequenceIndex; }
     int getDrumStep() const noexcept { return percussion.currentStep(); }
     void triggerDrum (const Parameters& p) noexcept { percussion.trigger (p.drums); }
+    void sampleModulation() noexcept { modulation.requestSample(); }
+    const ModulationValues& getModulation() const noexcept { return modulation.outputs(); }
     void noteOn (int midiNote, const Parameters& p, const Routes& r) noexcept
     {
         midiNote = std::clamp (midiNote, 0, 127);
         midiPitch = midiNote;
+        noteHeld = true;
         if (r.source[index (Port::envGate)] == index (Port::seqGate))
             envelope.on (p, sr);
     }
     void noteOff (const Parameters& p, const Routes& r) noexcept
     {
+        noteHeld = false;
         if (r.source[index (Port::envGate)] == index (Port::seqGate))
             envelope.off (p, sr);
     }
@@ -223,6 +266,7 @@ public:
         if (! runSequence && lastRunning)
         {
             envelope.off (p, sr);
+            noteHeld = false;
             sequenceIndex = -1;
             gateSamples = 0;
         }
@@ -247,8 +291,42 @@ public:
             if (gateSamples > 0 && --gateSamples == 0) noteOff (p, r);
         }
 
-        const double note1 = r.connected (Port::seqPitch, Port::oscPitch) ? midiPitch : 48;
-        const double note2 = r.connected (Port::seqPitch, Port::osc2Pitch) ? midiPitch : 48;
+        const double lfo = std::sin (2.0 * pi * lfoPhase);
+        lfoPhase += std::max (0.01f, p.lfoRate) / sr;
+        if (lfoPhase >= 1.0) lfoPhase -= 1.0;
+        const float env = envelope.next (p, sr);
+        const auto cvSource = [&] (int source) noexcept -> double
+        {
+            const auto& m = modulation.outputs();
+            switch (static_cast<Port> (source))
+            {
+                case Port::lfoCV: return lfo;
+                case Port::envCV: return env;
+                case Port::seqGate: return noteHeld ? 1.0 : 0.0;
+                case Port::modTriangle: return m.triangle;
+                case Port::modSquare: return m.square;
+                case Port::modNoise: return m.noise;
+                case Port::modSampleOut: return m.held;
+                case Port::modAtt1Out: return m.atten1;
+                case Port::modAtt2Out: return m.atten2;
+                case Port::modMixOut: return m.mixed;
+                case Port::modInvertOut: return m.inverted;
+                case Port::modLagOut: return m.lag;
+                default: return 0.0;
+            }
+        };
+        modulation.process (p.modulation, [&] (ModulationInput input) noexcept
+        {
+            constexpr std::array<Port, 9> inputs {{ Port::modSampleIn, Port::modClockIn,
+                Port::modAtt1In, Port::modAtt2In, Port::modMixIn1, Port::modMixIn2,
+                Port::modMixIn3, Port::modMixIn4, Port::modLagIn }};
+            return cvSource (r.source[index (inputs[static_cast<size_t> (input)])]);
+        });
+        const double modPitchDepth = std::clamp (double (p.modulation.pitchDepth), 0.0, 24.0);
+        const double note1 = (r.connected (Port::seqPitch, Port::oscPitch) ? midiPitch : 48)
+                           + cvSource (r.source[index (Port::oscMod1In)]) * modPitchDepth;
+        const double note2 = (r.connected (Port::seqPitch, Port::osc2Pitch) ? midiPitch : 48)
+                           + cvSource (r.source[index (Port::oscMod2In)]) * modPitchDepth;
         targetFrequency = 440.0 * std::pow (2.0, (note1 - 69.0 + p.tune) / 12.0);
         const double target2 = 440.0 * std::pow (2.0, (note2 - 69.0 + p.tune2 + p.fine2 * 0.01) / 12.0);
         currentFrequency += (targetFrequency - currentFrequency) * std::min (1.0, 1.0 / (0.005 * sr));
@@ -280,18 +358,20 @@ public:
         const double mixed = (oscillatorInput (Port::mixerIn1) * smoothMix1
                             + oscillatorInput (Port::mixerIn2) * smoothMix2) * smoothMixLevel;
 
-        const double lfo = std::sin (2.0 * pi * lfoPhase);
-        lfoPhase += std::max (0.01f, p.lfoRate) / sr;
-        if (lfoPhase >= 1.0) lfoPhase -= 1.0;
-        const float env = envelope.next (p, sr);
-
         double effectiveCutoff = p.cutoff;
         switch (r.source[index (Port::filterCV)])
         {
             case index (Port::lfoCV): effectiveCutoff += lfo * p.lfoDepth; break;
             case index (Port::envCV): effectiveCutoff += env * std::max (0.0f, p.lfoDepth); break;
-            default: break;
+            default: effectiveCutoff += cvSource (r.source[index (Port::filterCV)])
+                                     * std::clamp (double (p.modulation.filterDepth), 0.0, 8000.0); break;
         }
+        if (r.source[index (Port::filterCV)] >= index (Port::modTriangle))
+        {
+            smoothModCutoff += (effectiveCutoff - smoothModCutoff) * std::min (1.0, 1.0 / (sr * 0.002));
+            effectiveCutoff = smoothModCutoff;
+        }
+        else smoothModCutoff = effectiveCutoff;
         const auto preFilterInput = [&] (Port input) noexcept
         {
             return r.connected (Port::mixerOut, input) ? mixed : oscillatorInput (input);
@@ -305,8 +385,17 @@ public:
         {
             case index (Port::envCV): cv = env; break;
             case index (Port::lfoCV): cv = 0.5 + 0.5 * lfo; break;
-            default: break;
+            default:
+                if (r.source[index (Port::vcaCV)] >= 0)
+                {
+                    const double depth = std::clamp (double (p.modulation.ampDepth), 0.0, 1.0);
+                    const double target = 1.0 - depth + depth * (0.5 + 0.5 * cvSource (r.source[index (Port::vcaCV)]));
+                    smoothModAmp += (target - smoothModAmp) * std::min (1.0, 1.0 / (sr * 0.002));
+                    cv = smoothModAmp;
+                }
+                break;
         }
+        if (r.source[index (Port::vcaCV)] < index (Port::modTriangle)) smoothModAmp = cv;
         const double vca = vcaInput * std::clamp (cv, 0.0, 1.0) * p.level;
         double audioOut = 0.0;
         switch (r.source[index (Port::outputIn)])
@@ -373,10 +462,13 @@ private:
     double currentFrequency2 = 130.81278265;
     double smoothMix1 = 0.0, smoothMix2 = 0.0, smoothMixLevel = 0.0;
     double smoothMaster = 0.0;
+    double smoothModAmp = 1.0, smoothModCutoff = 1200.0;
     double samplesToStep = 0.0;
     int gateSamples = 0, sequenceIndex = -1, midiPitch = 48;
     bool lastRunning = false;
+    bool noteHeld = false;
     Envelope envelope;
     PercussionEngine percussion;
+    ModulationEngine modulation;
 };
 } // namespace anks

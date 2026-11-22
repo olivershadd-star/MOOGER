@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(MOOGER VERSION 0.4.0 LANGUAGES C CXX)
+project(MOOGER VERSION 0.5.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -17,6 +17,9 @@ if (ANKS_BUILD_SMOKE_TEST)
     add_executable(mooger_percussion Tests/Percussion.cpp Source/PercussionEngine.h Source/SynthEngine.h)
     target_compile_features(mooger_percussion PRIVATE cxx_std_17)
     add_test(NAME MOOGER_Percussion COMMAND mooger_percussion)
+    add_executable(mooger_modulation Tests/Modulation.cpp Source/ModulationEngine.h Source/SynthEngine.h)
+    target_compile_features(mooger_modulation PRIVATE cxx_std_17)
+    add_test(NAME MOOGER_Modulation COMMAND mooger_modulation)
 endif()
 
 # Permit independent DSP validation without fetching JUCE or GUI dependencies.
@@ -54,6 +57,7 @@ juce_add_plugin(MOOGER
 target_sources(MOOGER PRIVATE
     Source/SynthEngine.h
     Source/PercussionEngine.h
+    Source/ModulationEngine.h
     Source/PluginProcessor.h
     Source/PluginProcessor.cpp
     Source/PluginEditor.h

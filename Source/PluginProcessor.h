@@ -36,6 +36,12 @@ public:
     int displayedStep() const noexcept { return activeStep.load (std::memory_order_relaxed); }
     int displayedDrumStep() const noexcept { return activeDrumStep.load (std::memory_order_relaxed); }
     void requestDrumTrigger() noexcept { drumTriggerRequested.store (true, std::memory_order_release); }
+    void requestModulationSample() noexcept { sampleRequested.store (true, std::memory_order_release); }
+    std::array<float, 3> displayedModulation() const noexcept
+    {
+        return {{ modTriangle.load (std::memory_order_relaxed), modHeld.load (std::memory_order_relaxed),
+                  modLag.load (std::memory_order_relaxed) }};
+    }
     void requestPreview() noexcept { previewRequested.store (true, std::memory_order_release); }
     juce::AudioProcessorValueTreeState parameters;
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
@@ -47,6 +53,8 @@ private:
     std::atomic<int> activeStep {-1};
     std::atomic<int> activeDrumStep {-1};
     std::atomic<bool> drumTriggerRequested {false};
+    std::atomic<bool> sampleRequested {false};
+    std::atomic<float> modTriangle {-1}, modHeld {0}, modLag {0};
     std::atomic<bool> previewRequested {false};
     int previewCountdown = 0;
     double currentSampleRate = 44100.0;

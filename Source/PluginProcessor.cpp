@@ -14,9 +14,10 @@ void addFloat (APVTS::ParameterLayout& l, const char* id, const char* label,
     const juce::String key (id);
     int precision = 2;
     if (key == "bpm" || key == "cutoff" || key == "lfoDepth" || key == "drumBpm"
-        || key == "drumCutoff" || key == "drumPitchDepth") precision = 0;
+        || key == "drumCutoff" || key == "drumPitchDepth" || key == "modFilterDepth") precision = 0;
     if (key == "tune" || key == "tune2" || key == "fine2" || key == "drumPitch") precision = 1;
-    if (key == "attack" || key == "decay" || key == "release" || key == "drumDecay" || key == "drumPitchDecay") precision = 3;
+    if (key == "attack" || key == "decay" || key == "release" || key == "drumDecay" || key == "drumPitchDecay"
+        || key == "modRise" || key == "modFall") precision = 3;
     auto attributes = juce::AudioParameterFloatAttributes()
         .withStringFromValueFunction ([precision] (float value, int) { return juce::String (value, precision); })
         .withValueFromStringFunction ([] (const juce::String& text) { return text.getFloatValue(); });
@@ -84,6 +85,18 @@ APVTS::ParameterLayout ANKSModularProcessor::createParameterLayout()
         addFloat (result, ("drumVel" + suffix).toRawUTF8(), ("Percussion velocity " + suffix).toRawUTF8(),
                   0, 1, defaults.steps[static_cast<size_t> (i)].velocity, 0.5f);
     }
+    addFloat (result, "modRate", "Modulation LFO rate Hz", 0.05f, 30, 1, 0.2f);
+    addFloat (result, "modAtten1", "CV attenuator 1", 0, 1, 0.5f);
+    addFloat (result, "modAtten2", "CV attenuator 2", 0, 1, 0.5f);
+    addFloat (result, "modMix1", "CV mixer input 1 level", 0, 1, 1);
+    addFloat (result, "modMix2", "CV mixer input 2 level", 0, 1, 1);
+    addFloat (result, "modOffset", "CV mixer offset", -1, 1, 0);
+    addFloat (result, "modLevel", "CV mixer output level", 0, 1, 0.8f);
+    addFloat (result, "modRise", "CV lag rise seconds", 0.001f, 2, 0.15f, 0.2f);
+    addFloat (result, "modFall", "CV lag fall seconds", 0.001f, 2, 0.15f, 0.2f);
+    addFloat (result, "modPitchDepth", "Pitch CV depth semitones", 0, 24, 2);
+    addFloat (result, "modFilterDepth", "Filter CV depth Hz", 0, 8000, 1500);
+    addFloat (result, "modAmpDepth", "VCA CV depth", 0, 1, 1);
     return result;
 }
 
@@ -101,6 +114,9 @@ void ANKSModularProcessor::prepareToPlay (double sampleRate, int)
     activeStep.store (-1, std::memory_order_relaxed);
     activeDrumStep.store (-1, std::memory_order_relaxed);
     drumTriggerRequested.store (false, std::memory_order_relaxed);
+    sampleRequested.store (false, std::memory_order_relaxed);
+    modTriangle.store (-1, std::memory_order_relaxed);
+    modHeld.store (0, std::memory_order_relaxed); modLag.store (0, std::memory_order_relaxed);
     previewCountdown = 0;
 }
 void ANKSModularProcessor::releaseResources() {}
@@ -167,6 +183,13 @@ anks::Parameters ANKSModularProcessor::readParameters() const noexcept
     p.drums.decay = val ("drumDecay"); p.drums.pitchDecay = val ("drumPitchDecay");
     p.drums.pitchDepth = val ("drumPitchDepth"); p.drums.cutoff = val ("drumCutoff");
     p.drums.resonance = val ("drumRes"); p.drums.level = val ("drumLevel");
+    p.modulation.rate = val ("modRate");
+    p.modulation.atten1 = val ("modAtten1"); p.modulation.atten2 = val ("modAtten2");
+    p.modulation.mix1 = val ("modMix1"); p.modulation.mix2 = val ("modMix2");
+    p.modulation.offset = val ("modOffset"); p.modulation.level = val ("modLevel");
+    p.modulation.rise = val ("modRise"); p.modulation.fall = val ("modFall");
+    p.modulation.pitchDepth = val ("modPitchDepth"); p.modulation.filterDepth = val ("modFilterDepth");
+    p.modulation.ampDepth = val ("modAmpDepth");
     for (int i = 0; i < 8; ++i)
     {
         const auto noteID = "note" + juce::String (i + 1);
@@ -196,6 +219,7 @@ void ANKSModularProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::
     auto* left = channels > 0 ? audio.getWritePointer (0) : nullptr;
     auto* right = channels > 1 ? audio.getWritePointer (1) : nullptr;
     if (drumTriggerRequested.exchange (false, std::memory_order_acq_rel)) engine.triggerDrum (p);
+    if (sampleRequested.exchange (false, std::memory_order_acq_rel)) engine.sampleModulation();
 
     for (int i = 0; i < n; ++i)
     {
@@ -220,12 +244,16 @@ void ANKSModularProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::
     }
     activeStep.store (p.run && p.seqMode ? engine.getCurrentStep() : -1, std::memory_order_relaxed);
     activeDrumStep.store (p.drums.run ? engine.getDrumStep() : -1, std::memory_order_relaxed);
+    const auto& mod = engine.getModulation();
+    modTriangle.store (static_cast<float> (mod.triangle), std::memory_order_relaxed);
+    modHeld.store (static_cast<float> (mod.held), std::memory_order_relaxed);
+    modLag.store (static_cast<float> (mod.lag), std::memory_order_relaxed);
 }
 
 void ANKSModularProcessor::getStateInformation (juce::MemoryBlock& dest)
 {
     juce::ValueTree root ("ANKSModularState");
-    root.setProperty ("version", 4, nullptr);
+    root.setProperty ("version", 5, nullptr);
     root.addChild (parameters.copyState(), -1, nullptr);
     juce::ValueTree patch ("PatchCables");
     const auto r = getRoutes();
