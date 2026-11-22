@@ -1,6 +1,8 @@
 # MOOGER V0.4 — laboratoire semi-modulaire natif
 
-Projet ANKS Labs, C++17/JUCE, VST3 Windows x64 et application autonome. Cœur inspiré du Mother-32, second oscillateur, mixer et voix rythmique indépendante. Les sources ne constituent pas un binaire Windows validé. Le moteur est un synthétiseur natif original ; aucune mesure de fidélité au circuit Mother-32 n'a été effectuée.
+Projet ANKS Labs, C++17/JUCE, VST3 Windows x64 et application autonome. Cœur inspiré du Mother-32, second oscillateur, mixer et voix rythmique indépendante. La compilation Windows et les quatre tests automatisés ont réussi ; le chargement et l'écoute dans Ableton restent à vérifier. Le moteur est un synthétiseur natif original ; aucune mesure de fidélité au circuit Mother-32 n'a été effectuée.
+
+[Télécharger la VST3 et l’EXE Windows x64](https://github.com/olivershadd-star/MOOGER/actions/runs/44971297135/artifacts/14733424346) · [Captures du rack](https://github.com/olivershadd-star/MOOGER/actions/runs/44971297135/artifacts/14734201045)
 
 ## Cette version
 
