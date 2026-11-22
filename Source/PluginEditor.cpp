@@ -19,19 +19,19 @@ ANKSModularEditor::ANKSModularEditor (ANKSModularProcessor& p)
           {anks::Port::seqPitch, {262.f, 365.f}, "PITCH OUT", 1},
           {anks::Port::seqGate, {318.f, 365.f}, "GATE OUT", 2},
           {anks::Port::oscPitch, {372.f, 365.f}, "PITCH IN", 1},
-          {anks::Port::oscOut, {507.f, 365.f}, "AUDIO OUT", 0},
-          {anks::Port::filterIn, {550.f, 365.f}, "AUDIO IN", 0},
-          {anks::Port::filterOut, {705.f, 365.f}, "AUDIO OUT", 0},
+          {anks::Port::oscOut, {507.f, 365.f}, "OUT", 0},
+          {anks::Port::filterIn, {550.f, 365.f}, "IN", 0},
+          {anks::Port::filterOut, {705.f, 365.f}, "OUT", 0},
           {anks::Port::filterCV, {614.f, 365.f}, "CUTOFF CV", 3},
-          {anks::Port::vcaIn, {752.f, 365.f}, "AUDIO IN", 0},
+          {anks::Port::vcaIn, {752.f, 365.f}, "IN", 0},
           {anks::Port::vcaCV, {808.f, 365.f}, "AMP CV", 3},
-          {anks::Port::vcaOut, {876.f, 365.f}, "AUDIO OUT", 0},
+          {anks::Port::vcaOut, {876.f, 365.f}, "OUT", 0},
           {anks::Port::envGate, {45.f, 599.f}, "GATE IN", 2},
           {anks::Port::envCV, {407.f, 599.f}, "ENV CV", 3},
           {anks::Port::lfoCV, {672.f, 599.f}, "LFO CV", 3},
-          {anks::Port::outputIn, {926.f, 365.f}, "AUDIO IN", 0},
+          {anks::Port::outputIn, {926.f, 365.f}, "IN", 0},
           {anks::Port::osc2Pitch, {731.f, 599.f}, "PITCH IN", 1},
-          {anks::Port::osc2Out, {866.f, 599.f}, "AUDIO OUT", 0},
+          {anks::Port::osc2Out, {866.f, 599.f}, "OUT", 0},
           {anks::Port::mixerIn1, {930.f, 599.f}, "INPUT 1", 0},
           {anks::Port::mixerIn2, {995.f, 599.f}, "INPUT 2", 0},
           {anks::Port::mixerOut, {1070.f, 599.f}, "MIX OUT", 0},
@@ -152,7 +152,7 @@ ANKSModularEditor::ANKSModularEditor (ANKSModularProcessor& p)
     addKnob ("lfoRate", "RATE", 469, 466, 90, 114);
     addKnob ("lfoDepth", "DEPTH", 574, 466, 90, 114);
 
-    const int drumControlsStart = getNumChildComponents();
+    const auto childrenBeforeDrums = getChildren();
     drumRunButton.setButtonText ("DRUM RUN");
     drumRunButton.setClickingTogglesState (true);
     drumRunButton.setBounds (250, 658, 100, 29);
@@ -203,9 +203,9 @@ ANKSModularEditor::ANKSModularEditor (ANKSModularProcessor& p)
         }
     }
 
-    for (int i = drumControlsStart; i < getNumChildComponents(); ++i)
-        drumControls.push_back (getChildComponent (i));
-    const int modulationControlsStart = getNumChildComponents();
+    for (auto* child : getChildren())
+        if (! childrenBeforeDrums.contains (child)) drumControls.push_back (child);
+    const auto childrenBeforeModulation = getChildren();
     sampleButton.setButtonText ("SAMPLE");
     sampleButton.setBounds (280, 658, 100, 29);
     sampleButton.onClick = [this] { processor.requestModulationSample(); };
@@ -220,8 +220,8 @@ ANKSModularEditor::ANKSModularEditor (ANKSModularProcessor& p)
     const char* names[] = {"LFO Hz", "ATT 1", "ATT 2", "MIX 1", "MIX 2", "OFFSET",
                            "RISE s", "FALL s", "CV LEVEL", "PITCH DEPTH", "FILTER Hz", "AMP DEPTH"};
     for (int i = 0; i < 12; ++i) addKnob (ids[i], names[i], 30 + i * 88, 715, 82, 94);
-    for (int i = modulationControlsStart; i < getNumChildComponents(); ++i)
-        modulationControls.push_back (getChildComponent (i));
+    for (auto* child : getChildren())
+        if (! childrenBeforeModulation.contains (child)) modulationControls.push_back (child);
     setModulationPanelVisible (true);
     startTimerHz (12);
 }
@@ -315,7 +315,8 @@ void ANKSModularEditor::drawCable (juce::Graphics& g, juce::Point<float> a,
                                     juce::Point<float> b, int type, bool preview)
 {
     const float delta = b.x - a.x;
-    const float lift = (std::abs (b.y - a.y) < 6.0f) ? 27.0f : 75.0f;
+    const float lift = (a.y > 800.0f && b.y > 800.0f) ? 16.0f
+                     : (std::abs (b.y - a.y) < 6.0f) ? 27.0f : 75.0f;
     juce::Path p;
     p.startNewSubPath (a);
     p.cubicTo ({a.x + std::clamp (delta * 0.30f, -75.0f, 75.0f), a.y + lift},

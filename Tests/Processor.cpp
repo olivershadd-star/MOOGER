@@ -46,6 +46,14 @@ void saveImage (juce::AudioProcessorEditor& editor, const char* name)
     juce::PNGImageFormat png;
     require (stream != nullptr && png.writeImageToStream (image, *stream), "could not save rack preview");
 }
+bool buttonVisible (juce::AudioProcessorEditor& editor, const char* text)
+{
+    for (auto* child : editor.getChildren())
+        if (auto* button = dynamic_cast<juce::Button*> (child))
+            if (button->getButtonText() == text) return button->isVisible();
+    require (false, "expected panel button missing");
+    return false;
+}
 }
 
 int main()
@@ -150,11 +158,13 @@ int main()
     require (std::abs (p.parameters.getRawParameterValue ("sustain")->load() - 0.15f) < 1e-5f, "opening editor changed sustain");
     require (std::abs (p.parameters.getRawParameterValue ("level")->load() - 0.65f) < 1e-5f, "opening editor changed VCA level");
     saveImage (*editor, "MOOGER-rack.png");
+    require (buttonVisible (*editor, "SAMPLE") && ! buttonVisible (*editor, "DRUM RUN"), "modulation view contains percussion controls");
     auto* rack = dynamic_cast<ANKSModularEditor*> (editor.get());
     require (rack != nullptr, "unexpected rack type");
     const auto beforeViewSwitch = p.getRoutes().source;
     rack->setModulationPanelVisible (false);
     require (p.getRoutes().source == beforeViewSwitch, "view switch changed patch");
+    require (buttonVisible (*editor, "DRUM RUN") && ! buttonVisible (*editor, "SAMPLE"), "percussion view contains modulation controls");
     saveImage (*editor, "MOOGER-rack-drums.png");
     rack->setModulationPanelVisible (true);
     editor->setSize (784, 665);
