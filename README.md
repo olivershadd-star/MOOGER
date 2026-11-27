@@ -14,13 +14,29 @@
 
 ---
 
+## ⬇ TÉLÉCHARGER ET INSTALLER — DOWNLOAD
+
+[![TÉLÉCHARGER LA DERNIÈRE VERSION](https://img.shields.io/github/v/release/olivershadd-star/MOOGER?include_prereleases&sort=date&display_name=tag&style=for-the-badge&logo=github&logoColor=F7FAFF&label=T%C3%89L%C3%89CHARGER&labelColor=10151E&color=EF343E)](../../releases/latest) [![TOUTES LES VERSIONS](https://img.shields.io/badge/TOUTES_LES-VERSIONS-F5C343?style=for-the-badge&labelColor=10151E)](../../releases)
+
+1. Clique sur **TÉLÉCHARGER**, puis, dans la rubrique *Assets*, télécharge `MOOGER-Windows-x64-X.Y.Z.zip` (X.Y.Z = numéro de version : prends toujours le plus grand).
+2. Clic droit sur le ZIP → **Extraire tout**.
+3. **Plugin pour Ableton** : copie le dossier `VST3\MOOGER.vst3` dans `C:\Program Files\Common Files\VST3`.
+4. Dans Live : **Préférences → Plug-ins → Dossier système VST3 = On**, puis **Relancer l'analyse**.
+5. **Sans Ableton** : lance `Application\MOOGER.exe`. Aucune installation.
+
+*Windows peut afficher « Windows a protégé votre ordinateur » : clique sur **Informations complémentaires → Exécuter quand même** (programme gratuit non signé, c'est normal).*
+
+**EN —** Click **DOWNLOAD**, get `MOOGER-Windows-x64-X.Y.Z.zip` from *Assets*, extract it and copy `VST3\MOOGER.vst3` to `C:\Program Files\Common Files\VST3`, then rescan plug-ins. Or run `Application\MOOGER.exe` without any DAW.
+
+---
+
 ## 01 // LE PROJET
 
 **MOOGER** est une création originale d'ANKS Labs : un synthétiseur semi-modulaire natif inspiré par l'approche analogique, avec deux VCO, patching virtuel, VCF/VCA, séquenceur huit pas, contrôles CV et une voix de percussion indépendante. C'est un laboratoire de synthèse, **pas** une émulation de circuits Moog.
 
 > **Statut : prototype v0.5 / test build.** La compilation Windows et les tests automatisés documentés ont réussi ; l'écoute et l'intégration dans Ableton restent à confirmer. Ne pas considérer ce build comme stable.
 
-**[Sources & documentation](https://github.com/olivershadd-star/MOOGER)** · **[Builds de test / GitHub Actions](https://github.com/olivershadd-star/MOOGER/actions)**
+**[Sources & documentation](https://github.com/olivershadd-star/MOOGER)** · **[Toutes les versions](https://github.com/olivershadd-star/MOOGER/releases)**
 
 ---
 
