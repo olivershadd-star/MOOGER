@@ -1,24 +1,22 @@
-# MOOGER V0.5 — validation
+# MOOGER V0.6 — vérifications
 
-## Réalisé localement sur Linux
+## Localement sur Linux
 
-- CMake Release sans JUCE : quatre tests DSP réussis (cœur, VCO/mixer, percussion et modulation).
-- Modulation à 44,1/48/96 kHz : captures sur front montant, maintien entre fronts, SAMPLE manuel, gains des deux atténuateurs, quatre entrées/offset/inversion du mixer, montée/descente du lag, LFO et bruit bornés.
-- Panneau non relié à une destination sonore : comparaison binaire contre le moteur V0.4 publié, 1 504 800 échantillons identiques (trois fréquences, quatre ondes, mélodie et percussion actives).
-- CV constant : VCO1 passant de 440 à 880 Hz avec une profondeur d'une octave.
-- Neuf sorties utilitaires vers filtre, VCA et hauteur des deux VCO : stabilité numérique. Refus de câbles audio/CV et de boucles interdites.
-- AddressSanitizer et UndefinedBehaviorSanitizer sur le test de modulation : réussite.
-- Vérification syntaxique C++17 de l'éditeur, du processeur et du test d'intégration JUCE.
+- CMake Release sans JUCE : 6/6 tests réussis (quatre historiques, nouveau rack et catalogue).
+- Banque : 16 types, 32 instances, refus du dépassement, contrôle des identifiants et du catalogue JSON.
+- À 44,1/48/96 kHz : starter huit pas audible, deux VCO accordés indépendamment, deux LFO/enveloppes indépendants, déplacement sans changement d'un échantillon, priorité MIDI et relâchement, boucles audio via filtre/delay, tous les types instanciables, reconfiguration et reprise après prepare.
+- Compteur de `new` pendant le rendu : zéro allocation C++ dans le moteur de graphe.
+- Publication concurrente : 10 000 modèles, aucun instantané incohérent observé dans ce test.
+- AddressSanitizer + UndefinedBehaviorSanitizer sur le test du nouveau moteur : réussite.
+- Vérification syntaxique C++17 des sources JUCE et des nouveaux tests d'intégration.
 
-## Réalisé sur Windows 2022 / MSVC x64
+## Prévu dans la compilation Windows
 
-[Build validé](https://github.com/olivershadd-star/MOOGER/actions/runs/44973665441), source `437b19b1627ae57bc070becfcc76af99f698c069` : **5/5 tests réussis**.
+- VST3, Standalone et sept tests CTest.
+- Tests du processeur classique conservés et test du rack libre à trois fréquences et quatre tailles de blocs.
+- Duplication, remplacement, déplacement et suppression de modules/câbles ; sauvegarde/restauration des instances, paramètres et positions ; refus d'un type de module inconnu sans destruction du rack courant.
+- Événements MIDI à leur offset dans le bloc, ouverture avant/arrière sans changement des réglages, absence de commandes musicales visibles à l'arrière.
+- Gestionnaires UI de déplacement, dépôt depuis la banque et clics de connexion/déconnexion des prises.
+- Captures des faces avant/arrière et de la taille réduite.
 
-- Compilation VST3, EXE et cinq tests CTest en Release : réussite.
-- Traitement JUCE aux trois fréquences et blocs 64/128/256/512, sauvegarde des paramètres et câbles CV, migrations V0.3 et V0.4.
-- Vérification de SAMPLE, maintien du S&H, ouverture de l'éditeur sans modification des paramètres et changement de vue sans changement de patch.
-- Captures Windows des vues modulation et percussion, plus taille réduite : relues visuellement.
-- Vérification explicite de la visibilité des boutons SAMPLE et DRUM RUN dans leurs vues respectives : réussite.
-- ZIP téléchargé, somme SHA-256 contrôlée, bundle VST3 et EXE vérifiés au format PE Windows x64.
-
-L'écoute et le chargement dans Ableton Live 12 ne sont pas couverts par ces tests. Pas de mesure de fidélité sonore au CP-251, ni de garantie d'absence de tout transitoire lors d'un changement de câble ou de source.
+Ces vérifications ne remplacent pas le scan et l'écoute dans Ableton Live 12, la mesure CPU en DAW et les essais d'ergonomie réels. Les anciens patches sont relus dans le mode classique, sans conversion automatique en graphes libres.

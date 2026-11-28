@@ -1,4 +1,5 @@
 #include "PluginEditor.h"
+#include "FreeRackEditor.h"
 #include <algorithm>
 #include <cmath>
 
@@ -101,6 +102,16 @@ ANKSModularEditor::ANKSModularEditor (ANKSModularProcessor& p)
     panelButton.setBounds (984, 39, 118, 31);
     panelButton.onClick = [this] { setModulationPanelVisible (panelButton.getToggleState()); };
     addAndMakeVisible (panelButton);
+    newFreeRackButton.setButtonText ("NOUVEAU RACK LIBRE");
+    newFreeRackButton.setBounds (414, 39, 245, 31);
+    newFreeRackButton.onClick = [this]
+    {
+        processor.newFreeRack (1);
+        freeRackOverlay = std::make_unique<FreeRackEditor> (processor, true);
+        addAndMakeVisible (*freeRackOverlay); stopTimer();
+        setResizeLimits (1000, 700, 1800, 1200); getConstrainer()->setFixedAspectRatio (0); setSize (1440, 900); resized();
+    };
+    addAndMakeVisible (newFreeRackButton);
 
     addKnob ("bpm", "BPM", 310, 4, 84, 80);
     // Eight note steps, each with a switch. A slider changes semitone offset from C3.
@@ -257,6 +268,7 @@ ANKSModularEditor::~ANKSModularEditor()
 
 void ANKSModularEditor::resized()
 {
+    if (freeRackOverlay) { freeRackOverlay->setTransform ({}); freeRackOverlay->setBounds (getLocalBounds()); return; }
     const auto transform = juce::AffineTransform::scale (getWidth() / 1120.0f);
     for (auto* child : getChildren())
         if (dynamic_cast<juce::ResizableCornerComponent*> (child) == nullptr)

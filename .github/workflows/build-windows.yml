@@ -31,7 +31,7 @@ jobs:
       - name: Configure MSVC x64
         run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64
       - name: Build Release
-        run: cmake --build build --config Release --parallel 2 --target MOOGER_VST3 MOOGER_Standalone anks_audio_smoke mooger_modules mooger_percussion mooger_modulation mooger_processor_tests
+        run: cmake --build build --config Release --parallel 2 --target MOOGER_VST3 MOOGER_Standalone anks_audio_smoke mooger_modules mooger_percussion mooger_modulation mooger_rack mooger_processor_tests
       - name: Run DSP tests
         run: ctest --test-dir build -C Release --output-on-failure --no-tests=error
       - name: Check Windows artifacts
@@ -69,6 +69,7 @@ jobs:
           Get-ChildItem build -Recurse -File -Filter *.exe | Where-Object { $_.FullName -match '\\Release\\Standalone\\' } | ForEach-Object { Copy-Item $_.FullName "$dir/Application/" }
           if (-not (Get-ChildItem "$dir/Application")) { Remove-Item "$dir/Application" }
           Copy-Item README.md "$dir/"
+          Copy-Item Library/modules.json "$dir/module_catalog.json"
           Compress-Archive -Path $dir -DestinationPath "release/$name.zip" -Force
           Get-ChildItem release
       - name: Publier la version (onglet Releases)
@@ -81,7 +82,7 @@ jobs:
           prerelease: true
           files: release/*.zip
           body: |
-            **MOOGER — synthé semi-modulaire — ANKS Labs, gratuit.** Version de test : à essayer, pas encore une version finale.
+            **MOOGER — rack modulaire libre, faces avant/arrière — ANKS Labs, gratuit.** Version de test : à essayer, pas encore une version finale.
 
             1. Télécharge `MOOGER-Windows-x64-${{ steps.version.outputs.version }}.zip` ci-dessous (rubrique *Assets*) et fais clic droit → **Extraire tout**.
             2. **Plugin pour Ableton** : copie le dossier `VST3\MOOGER.vst3` dans `C:\Program Files\Common Files\VST3`.

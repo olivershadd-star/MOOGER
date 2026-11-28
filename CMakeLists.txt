@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(MOOGER VERSION 0.5.0 LANGUAGES C CXX)
+project(MOOGER VERSION 0.6.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -20,6 +20,12 @@ if (ANKS_BUILD_SMOKE_TEST)
     add_executable(mooger_modulation Tests/Modulation.cpp Source/ModulationEngine.h Source/SynthEngine.h)
     target_compile_features(mooger_modulation PRIVATE cxx_std_17)
     add_test(NAME MOOGER_Modulation COMMAND mooger_modulation)
+    find_package(Threads REQUIRED)
+    add_executable(mooger_rack Tests/Rack.cpp Source/RackEngine.h Source/RackModel.h Source/ModuleRegistry.h)
+    target_compile_features(mooger_rack PRIVATE cxx_std_17)
+    target_link_libraries(mooger_rack PRIVATE Threads::Threads)
+    add_test(NAME MOOGER_Rack COMMAND mooger_rack)
+    add_test(NAME MOOGER_Catalog COMMAND mooger_rack --check-catalog "${CMAKE_CURRENT_SOURCE_DIR}/Library/modules.json")
 endif()
 
 # Permit independent DSP validation without fetching JUCE or GUI dependencies.
@@ -46,7 +52,7 @@ juce_add_plugin(MOOGER
     PLUGIN_MANUFACTURER_CODE Anks
     PLUGIN_CODE Mo01
     PRODUCT_NAME "MOOGER"
-    DESCRIPTION "Compact semi-modular synthesizer with independent percussion"
+    DESCRIPTION "Free modular rack with independent module instances and front/back patching"
     FORMATS VST3 Standalone
     IS_SYNTH TRUE
     NEEDS_MIDI_INPUT TRUE
@@ -62,6 +68,8 @@ target_sources(MOOGER PRIVATE
     Source/PluginProcessor.cpp
     Source/PluginEditor.h
     Source/PluginEditor.cpp)
+target_sources(MOOGER PRIVATE Source/RackProcessor.cpp Source/FreeRackEditor.cpp Source/FreeRackEditor.h
+    Source/ModuleRegistry.h Source/RackModel.h Source/RackEngine.h)
 
 target_compile_definitions(MOOGER PUBLIC
     JUCE_VST3_CAN_REPLACE_VST2=0
@@ -77,7 +85,7 @@ target_link_libraries(MOOGER PRIVATE
     juce::juce_recommended_warning_flags)
 
 if (ANKS_BUILD_SMOKE_TEST)
-    add_executable(mooger_processor_tests Tests/Processor.cpp)
+    add_executable(mooger_processor_tests Tests/Processor.cpp Tests/RackProcessor.cpp)
     target_compile_definitions(mooger_processor_tests PRIVATE JucePlugin_Name="MOOGER" JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
     target_link_libraries(mooger_processor_tests PRIVATE MOOGER juce::juce_audio_utils juce::juce_audio_processors
         juce::juce_recommended_config_flags)

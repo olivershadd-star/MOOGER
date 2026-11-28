@@ -1,5 +1,6 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "FreeRackEditor.h"
 #include <cmath>
 
 namespace
@@ -97,6 +98,11 @@ APVTS::ParameterLayout ANKSModularProcessor::createParameterLayout()
     addFloat (result, "modPitchDepth", "Pitch CV depth semitones", 0, 24, 2);
     addFloat (result, "modFilterDepth", "Filter CV depth Hz", 0, 8000, 1500);
     addFloat (result, "modAmpDepth", "VCA CV depth", 0, 1, 1);
+    for (int slot = 0; slot < mooger::maxModules; ++slot)
+        for (int p = 0; p < mooger::maxParameters; ++p)
+            result.add (std::make_unique<juce::AudioParameterFloat>
+                (ID {"rack" + juce::String (slot) + "p" + juce::String (p), 1},
+                 "Rack " + juce::String (slot + 1) + " control " + juce::String (p + 1), 0.0f, 1.0f, 0.0f));
     return result;
 }
 
@@ -105,12 +111,14 @@ ANKSModularProcessor::ANKSModularProcessor()
     parameters (*this, nullptr, "Parameters", createParameterLayout())
 {
     resetPatch();
+    initializeRack();
 }
 
 void ANKSModularProcessor::prepareToPlay (double sampleRate, int)
 {
     currentSampleRate = std::max (8000.0, sampleRate);
     engine.prepare (currentSampleRate);
+    rackEngine.prepare (currentSampleRate);
     activeStep.store (-1, std::memory_order_relaxed);
     activeDrumStep.store (-1, std::memory_order_relaxed);
     drumTriggerRequested.store (false, std::memory_order_relaxed);
@@ -207,6 +215,39 @@ anks::Parameters ANKSModularProcessor::readParameters() const noexcept
 void ANKSModularProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::MidiBuffer& midi)
 {
     juce::ScopedNoDenormals guard;
+    if (isFreeRack())
+    {
+        mooger::RackState incoming;
+        if (rackMailbox.read (incoming)) rackEngine.apply (incoming);
+        mooger::RackControls values {};
+        for (int slot = 0; slot < mooger::maxModules; ++slot)
+            for (int p = 0; p < mooger::maxParameters; ++p) values[size_t (slot)][size_t (p)] = rackValue (slot, p);
+        rackEngine.setControls (values);
+        const auto triggers = rackTriggers.exchange (0, std::memory_order_acq_rel);
+        for (int slot = 0; slot < mooger::maxModules; ++slot)
+            if ((triggers & (std::uint32_t (1) << slot)) != 0) rackEngine.trigger (slot);
+        audio.clear(); auto event = midi.cbegin();
+        for (int frame = 0; frame < audio.getNumSamples(); ++frame)
+        {
+            while (event != midi.cend() && (*event).samplePosition <= frame)
+            {
+                const auto message = *event;
+                if (message.numBytes >= 3)
+                {
+                    const int kind = message.data[0] & 0xf0;
+                    if (kind == 0x90 && message.data[2] > 0) rackEngine.noteOn (message.data[1], message.data[2] / 127.0f);
+                    if (kind == 0x80 || (kind == 0x90 && message.data[2] == 0)) rackEngine.noteOff (message.data[1]);
+                    if (kind == 0xb0 && (message.data[1] == 120 || message.data[1] == 123)) rackEngine.allNotesOff();
+                }
+                ++event;
+            }
+            const auto sample = rackEngine.process();
+            if (audio.getNumChannels() > 0) audio.setSample (0, frame, audio.getNumChannels() == 1 ? (sample.left + sample.right) * 0.5f : sample.left);
+            if (audio.getNumChannels() > 1) audio.setSample (1, frame, sample.right);
+        }
+        for (int slot = 0; slot < mooger::maxModules; ++slot) rackSteps[size_t (slot)].store (rackEngine.step (slot), std::memory_order_relaxed);
+        return;
+    }
     const auto p = readParameters();
     const auto routes = getRoutes();
     audio.clear();
@@ -253,13 +294,14 @@ void ANKSModularProcessor::processBlock (juce::AudioBuffer<float>& audio, juce::
 void ANKSModularProcessor::getStateInformation (juce::MemoryBlock& dest)
 {
     juce::ValueTree root ("ANKSModularState");
-    root.setProperty ("version", 5, nullptr);
+    root.setProperty ("version", 6, nullptr);
     root.addChild (parameters.copyState(), -1, nullptr);
     juce::ValueTree patch ("PatchCables");
     const auto r = getRoutes();
     for (int i = 0; i < anks::portCount; ++i)
         patch.setProperty ("in" + juce::String (i), r.source[static_cast<size_t> (i)], nullptr);
     root.addChild (patch, -1, nullptr);
+    root.addChild (exportRack(), -1, nullptr);
     if (auto xml = root.createXml()) juce::AudioProcessor::copyXmlToBinary (*xml, dest);
 }
 void ANKSModularProcessor::setStateInformation (const void* data, int bytes)
@@ -268,6 +310,10 @@ void ANKSModularProcessor::setStateInformation (const void* data, int bytes)
     {
         const auto root = juce::ValueTree::fromXml (*xml);
         if (! root.hasType ("ANKSModularState")) return;
+        const auto freeRack = root.getChildWithName ("FreeRack");
+        const int version = root.getProperty ("version", 5);
+        mooger::RackState parsed;
+        if (version >= 6 && ! parseRackTree (freeRack, parsed)) return;
         auto parameterTree = root.getChildWithName ("Parameters");
         if (parameterTree.isValid())
         {
@@ -300,8 +346,11 @@ void ANKSModularProcessor::setStateInformation (const void* data, int bytes)
                 if (srcValue < anks::portCount) connect (static_cast<anks::Port> (srcValue), dst);
             }
         }
+        if (version >= 6) restoreRack (freeRack);
+        else setLegacyMode();
     }
 }
 
-juce::AudioProcessorEditor* ANKSModularProcessor::createEditor() { return new ANKSModularEditor (*this); }
+juce::AudioProcessorEditor* ANKSModularProcessor::createEditor()
+{ return isFreeRack() ? static_cast<juce::AudioProcessorEditor*> (new FreeRackEditor (*this)) : new ANKSModularEditor (*this); }
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter() { return new ANKSModularProcessor(); }

@@ -4,6 +4,7 @@
 #include "PluginProcessor.h"
 #include <memory>
 #include <vector>
+class FreeRackEditor;
 
 class ANKSModularEditor final : public juce::AudioProcessorEditor, private juce::Timer
 {
@@ -51,6 +52,8 @@ private:
     juce::TextButton runButton, seqButton, previewButton, resetButton;
     juce::TextButton drumRunButton, drumTriggerButton, drumFollowButton;
     juce::TextButton panelButton, sampleButton, animateButton;
+    juce::TextButton newFreeRackButton;
+    std::unique_ptr<FreeRackEditor> freeRackOverlay;
     std::vector<juce::Component*> drumControls, modulationControls;
     bool modulationPanelVisible = true;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> runAttachment, seqAttachment;

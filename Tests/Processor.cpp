@@ -56,6 +56,7 @@ bool buttonVisible (juce::AudioProcessorEditor& editor, const char* text)
 }
 }
 
+void runFreeRackTests();
 int main()
 {
     juce::ScopedJuceInitialiser_GUI init;
@@ -63,6 +64,7 @@ int main()
     for (int block : {64, 128, 256, 512})
     {
         ANKSModularProcessor p;
+        p.setLegacyMode();
         p.prepareToPlay (rate, block);
         require (render (p, rate / 8, block) == 0, "new processor not silent");
         set (p, "drumRun", 1);
@@ -71,6 +73,7 @@ int main()
     }
 
     ANKSModularProcessor p;
+    p.setLegacyMode();
     p.prepareToPlay (48000, 128);
     set (p, "drumNoise", 0.72f); set (p, "drumNote4", -13); set (p, "drumVel4", 0);
     p.disconnect (anks::Port::drumMixIn);
@@ -169,5 +172,6 @@ int main()
     rack->setModulationPanelVisible (true);
     editor->setSize (784, 665);
     saveImage (*editor, "MOOGER-rack-small.png");
+    runFreeRackTests();
     std::cout << "PASS: JUCE 3 rates x 4 block sizes, CV/percussion state, V0.3/V0.4 migration, HIT/SAMPLE, panel switching and editor previews\n";
 }
